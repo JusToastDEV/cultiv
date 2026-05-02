@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sealed Heavens Prototype</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Manrope:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="sky-gradient"></div>
+  <main class="app-shell">
+    <header class="hero">
+      <h1>Sealed Heavens</h1>
+      <p>Event-rich cultivation webgame prototype</p>
+      <div class="hero-meta">
+        <span id="current-region">Region: Ashen Frontier</span>
+        <span id="current-city">City: Ember Court</span>
+        <span id="realm-display">Realm: Mortal - Body Tempering</span>
+      </div>
+      <div class="hud-top">
+        <div class="hud-pill">
+          <strong>HP</strong>
+          <span id="hp-display">100 / 100</span>
+          <div class="meter"><i id="hp-meter"></i></div>
+        </div>
+        <div class="hud-pill">
+          <strong>Qi</strong>
+          <span id="qi-display">20 / 100</span>
+          <div class="meter"><i id="qi-meter"></i></div>
+        </div>
+        <div class="hud-pill">
+          <strong>Longevity</strong>
+          <span id="longevity-display">80 / 80</span>
+          <div class="meter"><i id="longevity-meter"></i></div>
+        </div>
+      </div>
+      <div id="global-cooldown-note" class="global-cooldown-note">Cooldowns -> none</div>
+    </header>
+
+    <section class="layout-grid">
+      <article class="card stats-card">
+        <h2>Core Status</h2>
+        <div class="stat-grid" id="stats-grid"></div>
+        <h3>Cultivation Paths</h3>
+        <div class="path-grid" id="path-grid"></div>
+      </article>
+
+      <article class="card progression-card">
+        <h2>Progression</h2>
+        <p id="breakthrough-note"></p>
+        <p id="cooldown-note"></p>
+        <div class="button-row">
+          <button data-action="meditate">Meditate</button>
+          <button data-action="breakthrough">Attempt Breakthrough</button>
+          <button data-action="learnTechnique">Learn Technique</button>
+        </div>
+        <div class="button-row">
+          <button data-action="trainBody">Body Cultivation</button>
+          <button data-action="trainSoul">Soul Cultivation</button>
+          <button data-action="trainSpirit">Spirit Cultivation</button>
+        </div>
+        <div class="button-row">
+          <button data-action="trainCraft">Craft Cultivation</button>
+          <button data-action="trainAlchemy">Alchemy Cultivation</button>
+        </div>
+      </article>
+
+      <article class="card economy-card">
+        <h2>Inventory and Storage</h2>
+        <div class="inventory-topline" id="inventory-topline"></div>
+        <div class="button-row">
+          <button data-action="hunt">Hunt Beast</button>
+          <button data-action="sell">Sell Materials</button>
+          <button data-action="bank">Bank Silver</button>
+        </div>
+        <div class="button-row">
+          <button data-action="buyRing">Buy/Upgrade Ring</button>
+          <button data-action="buyHome">Acquire Home</button>
+        </div>
+        <ul id="inventory-list" class="inventory-list"></ul>
+      </article>
+
+      <article class="card world-card">
+        <h2>World Map</h2>
+        <p>Travel through connected regions to unlock their cities and events.</p>
+        <div class="city-grid" id="region-grid"></div>
+        <h3>Regional Capitals</h3>
+        <div class="city-grid" id="city-grid"></div>
+      </article>
+
+      <article class="card events-card full-width">
+        <div class="events-header">
+          <h2>Event Log</h2>
+          <div class="button-row">
+            <button data-action="explore">Trigger Event</button>
+            <button data-action="save">Save</button>
+            <button data-action="reset">Reset</button>
+          </div>
+        </div>
+        <ol id="event-log" class="event-log"></ol>
+      </article>
+    </section>
+  </main>
+
+  <script src="data.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>

@@ -1,0 +1,259 @@
+:root {
+  --bg-0: #0f1218;
+  --bg-1: #1a2230;
+  --bg-2: #273347;
+  --ink-0: #f7f4ec;
+  --ink-1: #d4c8b1;
+  --ink-2: #9da9b5;
+  --accent-fire: #e26f2f;
+  --accent-jade: #3ea58a;
+  --accent-ash: #7a6f63;
+  --danger: #cf4a3f;
+  --ok: #4ca169;
+  --shadow: rgba(4, 8, 16, 0.5);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Manrope, Segoe UI, sans-serif;
+  background: radial-gradient(circle at 20% 10%, #243445 0%, var(--bg-0) 45%),
+    linear-gradient(160deg, #121820 0%, #0a0d12 100%);
+  color: var(--ink-0);
+  min-height: 100vh;
+}
+
+.sky-gradient {
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(120deg, rgba(226, 111, 47, 0.08), rgba(62, 165, 138, 0.05), rgba(122, 111, 99, 0.04));
+  pointer-events: none;
+}
+
+.app-shell {
+  position: relative;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.2rem;
+}
+
+.hero {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: linear-gradient(145deg, rgba(32, 40, 54, 0.8), rgba(16, 22, 30, 0.85));
+  box-shadow: 0 16px 32px var(--shadow);
+  border-radius: 16px;
+  padding: 1.2rem;
+  margin-bottom: 1rem;
+}
+
+.hero h1 {
+  margin: 0;
+  font-family: Cinzel, Georgia, serif;
+  font-size: clamp(1.9rem, 4vw, 2.8rem);
+  letter-spacing: 0.05em;
+}
+
+.hero p {
+  margin: 0.35rem 0 0.8rem;
+  color: var(--ink-1);
+}
+
+.hero-meta {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  color: var(--ink-2);
+}
+
+.hud-top {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.65rem;
+  margin-top: 0.9rem;
+}
+
+.hud-pill {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 0.5rem 0.6rem;
+}
+
+.hud-pill strong {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--ink-1);
+  letter-spacing: 0.03em;
+}
+
+.hud-pill span {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--ink-0);
+  font-weight: 700;
+}
+
+.meter {
+  width: 100%;
+  height: 6px;
+  margin-top: 0.35rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.meter i {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #d65c4b, #e49b56);
+  transition: width 0.2s ease;
+}
+
+#qi-meter {
+  background: linear-gradient(90deg, #3f85d8, #64c8cf);
+}
+
+#longevity-meter {
+  background: linear-gradient(90deg, #4ca169, #8bcf7e);
+}
+
+.global-cooldown-note {
+  margin-top: 0.65rem;
+  color: var(--ink-2);
+  font-size: 0.9rem;
+}
+
+.layout-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 1rem;
+}
+
+.card {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(23, 30, 43, 0.85), rgba(15, 20, 29, 0.85));
+  box-shadow: 0 10px 20px var(--shadow);
+  padding: 1rem;
+}
+
+.card h2 {
+  margin-top: 0;
+  font-family: Cinzel, Georgia, serif;
+  font-size: 1.2rem;
+  color: var(--ink-1);
+}
+
+.stats-card,
+.progression-card,
+.economy-card,
+.world-card {
+  grid-column: span 6;
+}
+
+.events-card.full-width {
+  grid-column: span 12;
+}
+
+.stat-grid,
+.path-grid,
+.city-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.6rem;
+}
+
+.stat-tile,
+.path-tile,
+.city-tile {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 0.55rem;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.city-tile button {
+  width: 100%;
+  margin-top: 0.4rem;
+}
+
+.button-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+
+button {
+  background: linear-gradient(140deg, #31435c, #222f42);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--ink-0);
+  border-radius: 9px;
+  padding: 0.45rem 0.8rem;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(226, 111, 47, 0.75);
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+#cooldown-note {
+  margin: 0.25rem 0 0.6rem;
+  color: var(--ink-2);
+}
+
+.inventory-topline {
+  color: var(--ink-1);
+}
+
+.inventory-list,
+.event-log {
+  margin: 0.8rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.inventory-list li,
+.event-log li {
+  margin-bottom: 0.35rem;
+  color: var(--ink-2);
+}
+
+.events-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.good {
+  color: var(--ok);
+}
+
+.bad {
+  color: var(--danger);
+}
+
+@media (max-width: 900px) {
+  .stats-card,
+  .progression-card,
+  .economy-card,
+  .world-card,
+  .events-card.full-width {
+    grid-column: span 12;
+  }
+}
