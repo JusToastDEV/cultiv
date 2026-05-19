@@ -956,7 +956,8 @@ function renderTileMap() {
   if (!grid || !wrap || !_character || !_gameState) return;
 
   const state = _gameState;
-  const regionId = state.regionId ?? 'ashen-frontier';
+  const MAPPED_REGIONS = ['ashen-frontier'];
+  const regionId = MAPPED_REGIONS.includes(state.regionId) ? state.regionId : 'ashen-frontier';
   const px = state.tileX ?? 9;
   const py = state.tileY ?? 6;
   const visited = new Set(state.visitedTiles ?? []);
