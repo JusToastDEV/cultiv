@@ -1932,6 +1932,9 @@ button.btn-locked {
 .t-F   { background:#060d06; color:#254a22; border-color:#0a130a; }
 .t-X   { background:#0e0a05; color:#7d5a2a; border-color:#1c1208; }
 .t-V   { background:#060d11; color:#3a7d60; border-color:#0a1d22; }
+.t-K   { background:#0d0b08; color:#6a5230; border-color:#1c1510; } /* cave — dark tan */
+.t-H   { background:#060d08; color:#3a7455; border-color:#0a1a0e; } /* herb — jade-green */
+.t-B   { background:#0f0606; color:#7d2a2a; border-color:#1c0a0a; } /* beast lair — blood red */
 .t-fog { opacity:.06; pointer-events:none; }
 .t-player { outline:2px solid #c9a232; outline-offset:-2px; z-index:2; font-size:.9rem; }
 .t-player::after { content:''; position:absolute; inset:0; background:rgba(201,162,50,.12); }
@@ -1956,6 +1959,12 @@ button.btn-locked {
 }
 .tag-danger { background:rgba(207,74,63,.18); color:#e05050; padding:.1rem .35rem; border-radius:4px; font-size:.78rem; }
 .tag-city   { background:rgba(201,162,50,.18); color:#c9a232; padding:.1rem .35rem; border-radius:4px; font-size:.78rem; }
+.tag-vein   { background:rgba(58,125,96,.18);  color:#4caa7e; padding:.1rem .35rem; border-radius:4px; font-size:.78rem; }
+.tag-herb   { background:rgba(58,125,75,.16);  color:#5cb87c; padding:.1rem .35rem; border-radius:4px; font-size:.78rem; }
+.tag-ore    { background:rgba(120,90,50,.18);  color:#c0904a; padding:.1rem .35rem; border-radius:4px; font-size:.78rem; }
+.tag-mob    { background:rgba(130,40,40,.18);  color:#c05050; padding:.1rem .35rem; border-radius:4px; font-size:.78rem; }
+.tag-drop   { background:rgba(80,60,150,.18);  color:#a090d0; padding:.1rem .35rem; border-radius:4px; font-size:.78rem; }
+.tag-afk    { background:rgba(100,180,140,.12);color:#7eccaa; padding:.1rem .35rem; border-radius:4px; font-size:.78rem; }
 
 .inventory-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:.5rem; }
 .inv-item { border:1px solid var(--border);border-radius:8px;padding:.5rem;cursor:pointer;text-align:center;transition:border-color .12s;background:rgba(255,255,255,.03); }

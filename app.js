@@ -906,64 +906,237 @@ function appendToLog(text) {
 // ── Tile-based World Map ───────────────────────────────────────
 
 // Ashen Frontier tile definitions. Missing keys → open land.
-// t: M=mountain R=road C=city W=wild-zone F=forest X=ruin V=spirit-vein .=open
+// t: M=mountain R=road C=city W=wild-zone F=forest X=ruin V=spirit-vein K=cave H=herb-grove B=lair .=open
+// herbs/ores/mobs/afkable: harvestable resources and encounter hints per tile
 const AF_SPECIAL = new Map([
-  // ── Cities ──
-  ['4:2',  {t:'C', name:'Ember Court',      cityId:'ember'}],
-  ['14:2', {t:'C', name:'Sable Forge',       cityId:'sable-forge'}],
-  ['1:7',  {t:'C', name:'Char Haven',        cityId:'char-haven'}],
-  ['9:6',  {t:'C', name:'Ashgate Borough',   cityId:'ashgate'}],
-  ['17:6', {t:'C', name:'Grim Terrace',      cityId:'grim-terrace'}],
-  ['11:12',{t:'C', name:'Cinder Bastion',    cityId:'cinder'}],
-  // ── North road: Ember ↔ Ashgate ↔ Sable ──
+  // ════════════════════════════════════════════════════════════
+  // CITIES
+  // ════════════════════════════════════════════════════════════
+  ['4:2',  {t:'C', name:'Ember Court',        cityId:'ember'}],
+  ['14:2', {t:'C', name:'Sable Forge',         cityId:'sable-forge'}],
+  ['1:7',  {t:'C', name:'Char Haven',          cityId:'char-haven'}],
+  ['9:6',  {t:'C', name:'Ashgate Borough',     cityId:'ashgate'}],
+  ['17:6', {t:'C', name:'Grim Terrace',        cityId:'grim-terrace'}],
+  ['11:12',{t:'C', name:'Cinder Bastion',      cityId:'cinder'}],
+  ['22:8', {t:'C', name:'Irongate',            cityId:'irongate'}],
+  ['6:21', {t:'C', name:'Dusk Haven',          cityId:'dusk-haven'}],
+  ['31:4', {t:'C', name:'Voidmarch Post',      cityId:'voidmarch'}],
+
+  // ════════════════════════════════════════════════════════════
+  // ROADS — North belt
+  // ════════════════════════════════════════════════════════════
   ['5:2',{t:'R'}],['6:2',{t:'R'}],['7:2',{t:'R'}],['8:2',{t:'R'}],
   ['9:2',{t:'R'}],['9:3',{t:'R'}],['9:4',{t:'R'}],['9:5',{t:'R'}],
   ['10:2',{t:'R'}],['11:2',{t:'R'}],['12:2',{t:'R'}],['13:2',{t:'R'}],
-  // ── East road: Ashgate → Grim ──
+  // Ashgate → Grim Terrace
   ['10:6',{t:'R'}],['11:6',{t:'R'}],['12:6',{t:'R'}],['13:6',{t:'R'}],
   ['14:6',{t:'R'}],['15:6',{t:'R'}],['16:6',{t:'R'}],
-  // ── West road: Ashgate → Char ──
+  // Ashgate → Char Haven
   ['8:6',{t:'R'}],['7:6',{t:'R'}],['6:6',{t:'R'}],['5:6',{t:'R'}],
   ['4:6',{t:'R'}],['3:6',{t:'R'}],['2:6',{t:'R'}],['2:7',{t:'R'}],
-  // ── South road: Ashgate → Cinder ──
+  // Ashgate → Cinder Bastion
   ['9:7',{t:'R'}],['9:8',{t:'R'}],['9:9',{t:'R'}],['9:10',{t:'R'}],
   ['9:11',{t:'R'}],['10:11',{t:'R'}],['10:12',{t:'R'}],
-  // ── Exploration: Burnt Shrines (ruin) ──
-  ['2:3',{t:'X',name:'Burnt Shrines',     hazard:2, areaId:'burnt-shrines'}],
-  ['3:3',{t:'X',name:'Burnt Shrines',     hazard:2, areaId:'burnt-shrines'}],
-  ['2:4',{t:'X',name:'Burnt Shrines',     hazard:2, areaId:'burnt-shrines'}],
-  ['3:4',{t:'X',name:'Burnt Shrines',     hazard:2, areaId:'burnt-shrines'}],
-  ['2:5',{t:'X',name:'Burnt Shrines',     hazard:2, areaId:'burnt-shrines'}],
-  // ── Exploration: Cinder Steppe (wilderness) ──
-  ['6:9', {t:'W',name:'Cinder Steppe',    hazard:1, areaId:'cinder-steppe'}],
-  ['7:9', {t:'W',name:'Cinder Steppe',    hazard:1, areaId:'cinder-steppe'}],
-  ['6:10',{t:'W',name:'Cinder Steppe',    hazard:1, areaId:'cinder-steppe'}],
-  ['7:10',{t:'W',name:'Cinder Steppe',    hazard:1, areaId:'cinder-steppe'}],
-  ['6:11',{t:'W',name:'Cinder Steppe',    hazard:1, areaId:'cinder-steppe'}],
-  ['7:11',{t:'W',name:'Cinder Steppe',    hazard:1, areaId:'cinder-steppe'}],
-  ['8:12',{t:'W',name:'Cinder Steppe',    hazard:1, areaId:'cinder-steppe'}],
-  // ── Exploration: Smoke Pits (wilderness) ──
-  ['13:9', {t:'W',name:'Smoke Pits',      hazard:2, areaId:'smoke-pits'}],
-  ['14:9', {t:'W',name:'Smoke Pits',      hazard:2, areaId:'smoke-pits'}],
-  ['13:10',{t:'W',name:'Smoke Pits',      hazard:2, areaId:'smoke-pits'}],
-  ['14:10',{t:'W',name:'Smoke Pits',      hazard:2, areaId:'smoke-pits'}],
-  ['15:10',{t:'W',name:'Smoke Pits',      hazard:2, areaId:'smoke-pits'}],
-  ['13:11',{t:'W',name:'Smoke Pits',      hazard:2, areaId:'smoke-pits'}],
-  // ── Spirit Veins ──
-  ['6:3', {t:'V',name:'Ashen Spirit Vein',spiritDensity:3}],
-  ['14:8',{t:'V',name:'Eastern Vein',      spiritDensity:2}],
-  // ── Forests ──
-  ['3:8',{t:'F'}],['4:8',{t:'F'}],['3:9',{t:'F'}],['4:9',{t:'F'}],
-  ['11:8',{t:'F'}],['12:8',{t:'F'}],['11:9',{t:'F'}],['12:9',{t:'F'}],
+  // Sable Forge → Irongate (east trade road)
+  ['15:2',{t:'R'}],['16:2',{t:'R'}],['17:2',{t:'R'}],['18:2',{t:'R'}],['19:2',{t:'R'}],['20:2',{t:'R'}],
+  ['20:3',{t:'R'}],['20:4',{t:'R'}],['20:5',{t:'R'}],['20:6',{t:'R'}],['20:7',{t:'R'}],['21:7',{t:'R'}],['22:7',{t:'R'}],
+  // Irongate → Grim Terrace (connector)
+  ['18:6',{t:'R'}],['19:6',{t:'R'}],['20:6',{t:'R'}],['21:6',{t:'R'}],['21:7',{t:'R'}],
+  // Irongate south → Cinder Bastion
+  ['22:9',{t:'R'}],['22:10',{t:'R'}],['21:11',{t:'R'}],['20:11',{t:'R'}],
+  ['19:11',{t:'R'}],['18:12',{t:'R'}],['17:12',{t:'R'}],['16:12',{t:'R'}],['15:12',{t:'R'}],
+  ['14:12',{t:'R'}],['13:12',{t:'R'}],['12:12',{t:'R'}],
+  // Cinder Bastion south → Dusk Haven
+  ['11:13',{t:'R'}],['10:14',{t:'R'}],['9:15',{t:'R'}],['8:16',{t:'R'}],
+  ['7:17',{t:'R'}],['7:18',{t:'R'}],['6:19',{t:'R'}],['6:20',{t:'R'}],
+  // Voidmarch trade route west
+  ['28:4',{t:'R'}],['29:4',{t:'R'}],['30:4',{t:'R'}],
+  ['27:4',{t:'R'}],['26:4',{t:'R'}],['25:4',{t:'R'}],['24:4',{t:'R'}],['23:4',{t:'R'}],['22:4',{t:'R'}],
+  ['21:4',{t:'R'}],['21:3',{t:'R'}],['21:2',{t:'R'}],
+
+  // ════════════════════════════════════════════════════════════
+  // ANCIENT RUINS & EXPLORATION ZONES
+  // ════════════════════════════════════════════════════════════
+  // Burnt Shrines (existing)
+  ['2:3',{t:'X',name:'Burnt Shrines',       hazard:2, areaId:'burnt-shrines',   mobs:['remnant-shade','ashen-spirit']}],
+  ['3:3',{t:'X',name:'Burnt Shrines',       hazard:2, areaId:'burnt-shrines',   mobs:['remnant-shade']}],
+  ['2:4',{t:'X',name:'Burnt Shrines',       hazard:2, areaId:'burnt-shrines',   mobs:['ashen-spirit']}],
+  ['3:4',{t:'X',name:'Burnt Shrines',       hazard:2, areaId:'burnt-shrines',   mobs:['remnant-shade']}],
+  ['2:5',{t:'X',name:'Burnt Shrines',       hazard:2, areaId:'burnt-shrines',   mobs:['ashen-spirit','ember-wraith']}],
+  // Hollow Spire Ruins — NE of Sable Forge
+  ['17:3',{t:'X',name:'Hollow Spire Ruins', hazard:3, areaId:'hollow-spire',   mobs:['stone-puppet','ancient-golem'], drops:['scroll-fragment','rune-shard']}],
+  ['18:3',{t:'X',name:'Hollow Spire Ruins', hazard:3, areaId:'hollow-spire',   mobs:['stone-puppet']}],
+  ['17:4',{t:'X',name:'Hollow Spire Ruins', hazard:3, areaId:'hollow-spire',   mobs:['ancient-golem'], drops:['array-ore','rune-shard']}],
+  ['18:4',{t:'X',name:'Hollow Spire Ruins', hazard:3, areaId:'hollow-spire',   mobs:['stone-puppet','skeleton-guardian']}],
+  // Shattered Archive — far east
+  ['25:3',{t:'X',name:'Shattered Archive',  hazard:4, areaId:'shattered-archive', mobs:['archive-guardian','knowledge-wraith'], drops:['scroll-fragment','soul-amber']}],
+  ['25:4',{t:'X',name:'Shattered Archive',  hazard:4, areaId:'shattered-archive', mobs:['knowledge-wraith'], drops:['scroll-fragment']}],
+  ['24:3',{t:'X',name:'Shattered Archive',  hazard:4, areaId:'shattered-archive', mobs:['archive-guardian']}],
+  // Ashen Cathedral — deep south, high hazard
+  ['23:18',{t:'X',name:'Ashen Cathedral',   hazard:6, areaId:'ashen-cathedral',  mobs:['cathedral-revenant','stone-bishop','fallen-paragon'], drops:['legacy-shard','soul-amber','beast-core']}],
+  ['24:18',{t:'X',name:'Ashen Cathedral',   hazard:6, areaId:'ashen-cathedral',  mobs:['cathedral-revenant','fallen-paragon'], drops:['legacy-shard']}],
+  ['23:19',{t:'X',name:'Ashen Cathedral',   hazard:6, areaId:'ashen-cathedral',  mobs:['stone-bishop','cathedral-revenant']}],
+  ['24:19',{t:'X',name:'Ashen Cathedral',   hazard:6, areaId:'ashen-cathedral',  mobs:['stone-bishop'], drops:['soul-amber','blood-jade']}],
+  // Sunken Altar — southwest
+  ['5:22',{t:'X',name:'Sunken Altar',       hazard:4, areaId:'sunken-altar',    mobs:['altar-remnant','sealed-wraith'], drops:['soul-amber','spirit-herb']}],
+  ['5:23',{t:'X',name:'Sunken Altar',       hazard:4, areaId:'sunken-altar',    mobs:['sealed-wraith']}],
+  ['4:22',{t:'X',name:'Sunken Altar',       hazard:4, areaId:'sunken-altar',    mobs:['altar-remnant']}],
+
+  // ════════════════════════════════════════════════════════════
+  // WILDERNESS ZONES
+  // ════════════════════════════════════════════════════════════
+  // Cinder Steppe (existing, expanded)
+  ['6:9', {t:'W',name:'Cinder Steppe',      hazard:1, areaId:'cinder-steppe', mobs:['ember-hound','ash-wolf'],           herbs:['ember-root'],      afkable:true}],
+  ['7:9', {t:'W',name:'Cinder Steppe',      hazard:1, areaId:'cinder-steppe', mobs:['ember-hound'],                      herbs:['ember-root'],      afkable:true}],
+  ['6:10',{t:'W',name:'Cinder Steppe',      hazard:1, areaId:'cinder-steppe', mobs:['ash-wolf','cinder-lizard'],         herbs:['ember-root','char-grass']}],
+  ['7:10',{t:'W',name:'Cinder Steppe',      hazard:1, areaId:'cinder-steppe', mobs:['ember-hound','ash-wolf'],           herbs:['char-grass'],      afkable:true}],
+  ['6:11',{t:'W',name:'Cinder Steppe',      hazard:1, areaId:'cinder-steppe', mobs:['cinder-lizard'],                    herbs:['ember-root']}],
+  ['7:11',{t:'W',name:'Cinder Steppe',      hazard:1, areaId:'cinder-steppe', mobs:['ash-wolf','ember-hound'],           herbs:['char-grass']}],
+  ['8:12',{t:'W',name:'Cinder Steppe',      hazard:1, areaId:'cinder-steppe', mobs:['ember-hound'],                      herbs:['ember-root'],      afkable:true}],
+  // Smoke Pits (existing, expanded)
+  ['13:9', {t:'W',name:'Smoke Pits',        hazard:2, areaId:'smoke-pits',   mobs:['pit-viper','smoke-stalker'],        herbs:['ash-lotus']}],
+  ['14:9', {t:'W',name:'Smoke Pits',        hazard:2, areaId:'smoke-pits',   mobs:['smoke-stalker','shadow-crawler'],   herbs:['ash-lotus','venomweed']}],
+  ['13:10',{t:'W',name:'Smoke Pits',        hazard:2, areaId:'smoke-pits',   mobs:['pit-viper'],                        herbs:['venomweed'],       afkable:true}],
+  ['14:10',{t:'W',name:'Smoke Pits',        hazard:2, areaId:'smoke-pits',   mobs:['smoke-stalker'],                    herbs:['ash-lotus']}],
+  ['15:10',{t:'W',name:'Smoke Pits',        hazard:2, areaId:'smoke-pits',   mobs:['shadow-crawler','pit-viper'],       herbs:['ash-lotus','venomweed']}],
+  ['13:11',{t:'W',name:'Smoke Pits',        hazard:2, areaId:'smoke-pits',   mobs:['smoke-stalker'],                    herbs:['venomweed']}],
+  ['15:11',{t:'W',name:'Smoke Pits',        hazard:2, areaId:'smoke-pits',   mobs:['pit-viper','shadow-crawler']}],
+  // Ashfen Depths — central east
+  ['18:10',{t:'W',name:'Ashfen Depths',     hazard:3, areaId:'ashfen-depths', mobs:['ashfen-beast','iron-hide-boar'],   drops:['beast-core']}],
+  ['19:10',{t:'W',name:'Ashfen Depths',     hazard:3, areaId:'ashfen-depths', mobs:['ashfen-beast'],                    drops:['beast-core'],     afkable:true}],
+  ['18:11',{t:'W',name:'Ashfen Depths',     hazard:3, areaId:'ashfen-depths', mobs:['iron-hide-boar','blood-hound'],    drops:['beast-core','blood-jade']}],
+  ['19:11',{t:'W',name:'Ashfen Depths',     hazard:3, areaId:'ashfen-depths', mobs:['blood-hound'],                     drops:['blood-jade']}],
+  ['18:12',{t:'R'}], // road overrides
+  // Bone Steppes — eastern badlands
+  ['28:12',{t:'W',name:'Bone Steppes',      hazard:4, areaId:'bone-steppes',  mobs:['bone-scorpion','desiccated-lion'], drops:['beast-core']}],
+  ['29:12',{t:'W',name:'Bone Steppes',      hazard:4, areaId:'bone-steppes',  mobs:['desiccated-lion'],                 drops:['beast-core'],     afkable:true}],
+  ['28:13',{t:'W',name:'Bone Steppes',      hazard:4, areaId:'bone-steppes',  mobs:['bone-scorpion'],                   drops:['venom-gland']}],
+  ['29:13',{t:'W',name:'Bone Steppes',      hazard:4, areaId:'bone-steppes',  mobs:['desiccated-lion','bone-scorpion'], drops:['beast-core','venom-gland']}],
+  ['30:12',{t:'W',name:'Bone Steppes',      hazard:4, areaId:'bone-steppes',  mobs:['bone-scorpion']}],
+  // Cinder Lake Basin
+  ['14:15',{t:'W',name:'Cinder Lake Basin', hazard:2, areaId:'cinder-basin',  mobs:['lava-crab','ember-newt'],          herbs:['flame-wort']}],
+  ['15:15',{t:'W',name:'Cinder Lake Basin', hazard:2, areaId:'cinder-basin',  mobs:['lava-crab'],                       herbs:['flame-wort'],     afkable:true}],
+  ['14:16',{t:'W',name:'Cinder Lake Basin', hazard:2, areaId:'cinder-basin',  mobs:['ember-newt','lava-crab'],          herbs:['flame-wort','ember-root']}],
+  ['15:16',{t:'W',name:'Cinder Lake Basin', hazard:2, areaId:'cinder-basin',  mobs:['ember-newt']}],
+  // Serpent Coil Mire — eastern marshes
+  ['27:10',{t:'W',name:'Serpent Coil Mire', hazard:4, areaId:'serpent-mire',  mobs:['coil-serpent','marsh-hydra'],      drops:['venom-gland'], herbs:['marsh-lotus']}],
+  ['28:10',{t:'W',name:'Serpent Coil Mire', hazard:4, areaId:'serpent-mire',  mobs:['coil-serpent'],                    drops:['venom-gland'], herbs:['marsh-lotus'], afkable:true}],
+  ['27:11',{t:'W',name:'Serpent Coil Mire', hazard:4, areaId:'serpent-mire',  mobs:['marsh-hydra','coil-serpent'],      drops:['venom-gland','beast-core']}],
+  ['28:11',{t:'W',name:'Serpent Coil Mire', hazard:4, areaId:'serpent-mire',  mobs:['coil-serpent']}],
+  // Dusk Valley — near Dusk Haven
+  ['7:20', {t:'W',name:'Dusk Valley',       hazard:2, areaId:'dusk-valley',   mobs:['dusk-wolf','shadow-deer'],         herbs:['nightbloom'],  afkable:true}],
+  ['8:20', {t:'W',name:'Dusk Valley',       hazard:2, areaId:'dusk-valley',   mobs:['dusk-wolf'],                       herbs:['nightbloom','moonveil-grass']}],
+  ['7:21', {t:'W',name:'Dusk Valley',       hazard:2, areaId:'dusk-valley',   mobs:['shadow-deer','dusk-wolf'],         herbs:['moonveil-grass']}],
+  ['8:21', {t:'W',name:'Dusk Valley',       hazard:2, areaId:'dusk-valley',   mobs:['shadow-deer'],                     herbs:['nightbloom'],  afkable:true}],
+
+  // ════════════════════════════════════════════════════════════
+  // BEAST LAIRS
+  // ════════════════════════════════════════════════════════════
+  ['3:13',{t:'B',name:'Wolfpack Den',         hazard:2, areaId:'wolfpack-den',    mobs:['iron-fang-wolf','pack-leader'],     drops:['beast-core']}],
+  ['3:14',{t:'B',name:'Wolfpack Den',         hazard:2, areaId:'wolfpack-den',    mobs:['iron-fang-wolf'],                   drops:['beast-core'],     afkable:true}],
+  ['4:13',{t:'B',name:'Wolfpack Den',         hazard:2, areaId:'wolfpack-den',    mobs:['pack-leader','iron-fang-wolf'],     drops:['beast-core']}],
+  ['26:8',{t:'B',name:'Emberclaw Roost',      hazard:3, areaId:'emberclaw-roost', mobs:['emberclaw-hawk','fire-crow'],       drops:['beast-core','embersteel-ingot']}],
+  ['27:8',{t:'B',name:'Emberclaw Roost',      hazard:3, areaId:'emberclaw-roost', mobs:['emberclaw-hawk'],                   drops:['beast-core']}],
+  ['26:9',{t:'B',name:'Emberclaw Roost',      hazard:3, areaId:'emberclaw-roost', mobs:['fire-crow','emberclaw-hawk'],       drops:['beast-core'],     afkable:true}],
+  ['20:21',{t:'B',name:'Thundermaw Lair',     hazard:5, areaId:'thundermaw-lair', mobs:['thundermaw-beast','chaos-tiger'],   drops:['beast-core','array-ore'], herbs:['lightning-root']}],
+  ['21:21',{t:'B',name:'Thundermaw Lair',     hazard:5, areaId:'thundermaw-lair', mobs:['chaos-tiger'],                     drops:['beast-core']}],
+  ['20:22',{t:'B',name:'Thundermaw Lair',     hazard:5, areaId:'thundermaw-lair', mobs:['thundermaw-beast'],                drops:['beast-core','array-ore'], afkable:true}],
+
+  // ════════════════════════════════════════════════════════════
+  // CAVES & MINES
+  // ════════════════════════════════════════════════════════════
+  ['8:4', {t:'K',name:'Iron Gorge Cave',       hazard:2, areaId:'iron-gorge',      ores:['iron-ore','rough-crystal'],        drops:['black-iron-ore']}],
+  ['8:5', {t:'K',name:'Iron Gorge Cave',       hazard:2, areaId:'iron-gorge',      ores:['iron-ore'],                        drops:['black-iron-ore'],  afkable:true}],
+  ['7:4', {t:'K',name:'Iron Gorge Cave',       hazard:2, areaId:'iron-gorge',      ores:['rough-crystal','iron-ore'],        drops:['array-ore']}],
+  ['25:15',{t:'K',name:'Obsidian Cavern',      hazard:4, areaId:'obsidian-cavern', ores:['obsidian-vein','dark-crystal'],    drops:['black-iron-ore','array-ore']}],
+  ['26:15',{t:'K',name:'Obsidian Cavern',      hazard:4, areaId:'obsidian-cavern', ores:['obsidian-vein'],                   drops:['black-iron-ore'],  afkable:true}],
+  ['25:16',{t:'K',name:'Obsidian Cavern',      hazard:4, areaId:'obsidian-cavern', ores:['dark-crystal','obsidian-vein'],    drops:['array-ore','embersteel-ingot']}],
+  ['16:21',{t:'K',name:'Deep Sorrow Mines',    hazard:3, areaId:'deep-sorrow',     ores:['sorrow-coal','jade-seam'],         drops:['blood-jade','array-ore']}],
+  ['16:22',{t:'K',name:'Deep Sorrow Mines',    hazard:3, areaId:'deep-sorrow',     ores:['jade-seam','sorrow-coal'],         drops:['blood-jade'],      afkable:true}],
+  ['17:21',{t:'K',name:'Deep Sorrow Mines',    hazard:3, areaId:'deep-sorrow',     ores:['sorrow-coal'],                     drops:['array-ore']}],
+  ['13:23',{t:'K',name:'Hollow Earth Vent',    hazard:5, areaId:'hollow-vent',     ores:['fire-crystal','embersteel-raw'],   drops:['embersteel-ingot','array-ore'], mobs:['vent-salamander']}],
+  ['14:23',{t:'K',name:'Hollow Earth Vent',    hazard:5, areaId:'hollow-vent',     ores:['embersteel-raw','fire-crystal'],   drops:['embersteel-ingot'],afkable:true}],
+  ['33:12',{t:'K',name:'Void Crack Mines',     hazard:6, areaId:'void-mines',      ores:['void-shard','array-ore'],          drops:['array-ore','soul-amber'], mobs:['void-crawler']}],
+  ['33:13',{t:'K',name:'Void Crack Mines',     hazard:6, areaId:'void-mines',      ores:['void-shard'],                      drops:['soul-amber'],      afkable:true}],
+
+  // ════════════════════════════════════════════════════════════
+  // HERB GROVES
+  // ════════════════════════════════════════════════════════════
+  ['4:12',{t:'H',name:'Mistwing Hollow',       hazard:1, areaId:'mistwing',        herbs:['spirit-herb','moonveil-grass'],   afkable:true}],
+  ['4:14',{t:'H',name:'Mistwing Hollow',       hazard:1, areaId:'mistwing',        herbs:['spirit-herb','char-grass']}],
+  ['5:13',{t:'H',name:'Mistwing Hollow',       hazard:1, areaId:'mistwing',        herbs:['moonveil-grass','spirit-herb'],   afkable:true}],
+  ['5:14',{t:'H',name:'Mistwing Hollow',       hazard:1, areaId:'mistwing',        herbs:['spirit-herb']}],
+  ['18:16',{t:'H',name:'Jade Creek Herb Beds', hazard:1, areaId:'jade-creek',      herbs:['jade-petal','spirit-herb'],       afkable:true}],
+  ['18:17',{t:'H',name:'Jade Creek Herb Beds', hazard:1, areaId:'jade-creek',      herbs:['jade-petal','moonveil-grass']}],
+  ['19:17',{t:'H',name:'Jade Creek Herb Beds', hazard:1, areaId:'jade-creek',      herbs:['jade-petal'],                     afkable:true}],
+  ['11:17',{t:'H',name:'Ember Reed Marsh',     hazard:1, areaId:'ember-marsh',     herbs:['ember-root','ash-lotus'],         afkable:true}],
+  ['12:17',{t:'H',name:'Ember Reed Marsh',     hazard:1, areaId:'ember-marsh',     herbs:['ember-root','flame-wort']}],
+  ['11:18',{t:'H',name:'Ember Reed Marsh',     hazard:1, areaId:'ember-marsh',     herbs:['ash-lotus','ember-root'],         afkable:true}],
+  ['29:6', {t:'H',name:'Windbloom Plateau',    hazard:1, areaId:'windbloom',       herbs:['windbloom','spirit-herb'],        afkable:true}],
+  ['30:6', {t:'H',name:'Windbloom Plateau',    hazard:1, areaId:'windbloom',       herbs:['windbloom']}],
+  ['29:7', {t:'H',name:'Windbloom Plateau',    hazard:1, areaId:'windbloom',       herbs:['spirit-herb','windbloom'],        afkable:true}],
+  ['9:23', {t:'H',name:'Moonshade Grotto',     hazard:2, areaId:'moonshade',       herbs:['moon-dew-fungus','nightbloom'],   afkable:true}],
+  ['10:23',{t:'H',name:'Moonshade Grotto',     hazard:2, areaId:'moonshade',       herbs:['moon-dew-fungus'],                afkable:true}],
+  ['10:24',{t:'H',name:'Moonshade Grotto',     hazard:2, areaId:'moonshade',       herbs:['nightbloom','moon-dew-fungus']}],
+
+  // ════════════════════════════════════════════════════════════
+  // SPIRIT VEINS
+  // ════════════════════════════════════════════════════════════
+  ['6:3',  {t:'V',name:'Ashen Spirit Vein',    spiritDensity:3, herbs:['spirit-herb']}],
+  ['14:8', {t:'V',name:'Eastern Vein',          spiritDensity:2}],
+  ['11:19',{t:'V',name:'Jade Vale Vein',        spiritDensity:3, herbs:['jade-petal','spirit-herb']}],
+  ['12:20',{t:'V',name:'Jade Vale Vein',        spiritDensity:3, herbs:['jade-petal']}],
+  ['20:15',{t:'V',name:'Deep Meridian Vein',    spiritDensity:4, herbs:['spirit-herb']}],
+  ['21:15',{t:'V',name:'Deep Meridian Vein',    spiritDensity:4}],
+  ['20:16',{t:'V',name:'Deep Meridian Vein',    spiritDensity:4, herbs:['spirit-herb']}],
+  ['32:6', {t:'V',name:'Void Edge Seep',        spiritDensity:5, herbs:['soul-amber']}],
+  ['32:7', {t:'V',name:'Void Edge Seep',        spiritDensity:5}],
+  ['3:20', {t:'V',name:'Southern Spirit Pool',  spiritDensity:2, herbs:['moonveil-grass','spirit-herb']}],
+
+  // ════════════════════════════════════════════════════════════
+  // FORESTS
+  // ════════════════════════════════════════════════════════════
+  // Western forest cluster
+  ['3:8', {t:'F',name:'Charwood Forest',       herbs:['char-grass','ember-root'],    mobs:['forest-snake','shadow-deer'],    afkable:true}],
+  ['4:8', {t:'F',name:'Charwood Forest',       herbs:['char-grass'],                  mobs:['forest-snake']}],
+  ['3:9', {t:'F',name:'Charwood Forest',       herbs:['ember-root','char-grass'],    mobs:['shadow-deer','ash-wolf'],        afkable:true}],
+  ['4:9', {t:'F',name:'Charwood Forest',       herbs:['char-grass'],                  mobs:['ash-wolf']}],
+  // Central forest patch
+  ['11:8',{t:'F',name:'Ashwood Thicket',       herbs:['spirit-herb','ash-lotus'],    mobs:['spirit-fox','ash-bear'],         afkable:true}],
+  ['12:8',{t:'F',name:'Ashwood Thicket',       herbs:['ash-lotus'],                   mobs:['ash-bear']}],
+  ['11:9',{t:'F',name:'Ashwood Thicket',       herbs:['spirit-herb'],                 mobs:['spirit-fox','shadow-deer'],      afkable:true}],
+  ['12:9',{t:'F',name:'Ashwood Thicket',       herbs:['ash-lotus','spirit-herb'],    mobs:['ash-bear','spirit-fox']}],
+  // Northern pine vale
+  ['16:3',{t:'F',name:'Northern Pine Vale',    herbs:['pine-resin','char-grass'],    mobs:['pine-wolf']}],
+  ['16:4',{t:'F',name:'Northern Pine Vale',    herbs:['pine-resin'],                  mobs:['pine-wolf','forest-snake'],      afkable:true}],
+  ['17:5',{t:'F',name:'Northern Pine Vale',    herbs:['char-grass','pine-resin'],    mobs:['pine-wolf']}],
+  // Eastern canopy reach
+  ['24:9',{t:'F',name:'Eastern Canopy Reach',  herbs:['rare-spore','spirit-herb'],   mobs:['canopy-gecko','wind-lynx'],      afkable:true}],
+  ['24:10',{t:'F',name:'Eastern Canopy Reach', herbs:['rare-spore'],                  mobs:['wind-lynx']}],
+  ['25:9',{t:'F',name:'Eastern Canopy Reach',  herbs:['spirit-herb','rare-spore'],   mobs:['canopy-gecko'],                  afkable:true}],
+  ['25:10',{t:'F',name:'Eastern Canopy Reach', herbs:['rare-spore'],                  mobs:['wind-lynx','canopy-gecko']}],
+  // Mosswall preserve
+  ['32:13',{t:'F',name:'Mosswall Preserve',    herbs:['moon-dew-fungus','rare-spore'],mobs:['fungal-creeper']}],
+  ['32:14',{t:'F',name:'Mosswall Preserve',    herbs:['moon-dew-fungus'],             mobs:['fungal-creeper'],               afkable:true}],
+  // Southern bone forest
+  ['8:18',{t:'F',name:'Bone Tree Grove',       herbs:['nightbloom'],                  mobs:['bone-dryad','shadow-deer']}],
+  ['8:19',{t:'F',name:'Bone Tree Grove',       herbs:['nightbloom','moonveil-grass'], mobs:['bone-dryad'],                   afkable:true}],
+  ['9:18',{t:'F',name:'Bone Tree Grove',       herbs:['moonveil-grass'],              mobs:['shadow-deer','bone-dryad']}],
+  ['9:19',{t:'F',name:'Bone Tree Grove',       herbs:['nightbloom'],                  mobs:['bone-dryad']}],
+  // Deep spirit grove
+  ['22:19',{t:'F',name:'Deep Spirit Grove',    herbs:['soul-amber','spirit-herb'],   mobs:['spirit-stag','jade-serene'],     afkable:true}],
+  ['23:20',{t:'F',name:'Deep Spirit Grove',    herbs:['spirit-herb','soul-amber'],   mobs:['jade-serene']}],
+  ['22:20',{t:'F',name:'Deep Spirit Grove',    herbs:['soul-amber'],                  mobs:['spirit-stag'],                  afkable:true}],
 ]);
 
-const AF_W = 20, AF_H = 15;
-const TILE_GLYPHS = { M:'▲', R:'·', C:'⌂', W:'≋', F:'♦', X:'✦', V:'◎', '.':'·' };
+const AF_W = 36, AF_H = 26;
+const TILE_GLYPHS = { M:'▲', R:'·', C:'⌂', W:'≋', F:'♦', X:'✦', V:'◎', K:'⛏', H:'✿', B:'⊛', '.':'·' };
 const TILE_TERRAIN_NAMES = {
   M:'Mountain', R:'Road', C:'City', W:'Wilderness Zone',
-  F:'Forest', X:'Ancient Ruin', V:'Spirit Vein', '.':'Open Land'
+  F:'Forest', X:'Ancient Ruin', V:'Spirit Vein', K:'Cave/Mine',
+  H:'Herb Grove', B:'Beast Lair', '.':'Open Land'
 };
-const TILE_SIZE = 36;
+const TILE_SIZE = 34;
 
 function getAfTile(x, y) {
   if (x <= 0 || x >= AF_W - 1 || y <= 0 || y >= AF_H - 1) return { t:'M' };
@@ -1067,12 +1240,35 @@ function showTileInfo(tile, x, y) {
 
   const name = tile.name ?? TILE_TERRAIN_NAMES[tile.t] ?? 'Unknown';
   let html = `<strong>${escHtml(name)}</strong>`;
+
+  if (tile.t === 'K') html = `<strong>⛏ ${escHtml(name)}</strong>`;
+  else if (tile.t === 'H') html = `<strong>✿ ${escHtml(name)}</strong>`;
+  else if (tile.t === 'B') html = `<strong>⊛ ${escHtml(name)}</strong>`;
+  else if (tile.t === 'V') html = `<strong>◎ ${escHtml(name)}</strong>`;
+  else if (tile.t === 'X') html = `<strong>✦ ${escHtml(name)}</strong>`;
+
   if (tile.hazard) {
     const dl = tile.hazard >= 7 ? 'Extreme' : tile.hazard >= 5 ? 'High' : tile.hazard >= 3 ? 'Mid' : 'Low';
-    html += ` · <span class="tag-danger">Danger ${tile.hazard} (${dl})</span>`;
+    html += ` <span class="tag-danger">⚠ Danger ${tile.hazard}</span>`;
   }
-  if (tile.spiritDensity) html += ` · Spirit Density: ${tile.spiritDensity}`;
-  if (tile.cityId) html += ` · <span class="tag-city">City</span>`;
+  if (tile.spiritDensity) html += ` <span class="tag-vein">Spirit ×${tile.spiritDensity}</span>`;
+  if (tile.cityId) html += ` <span class="tag-city">City</span>`;
+
+  // Resource hints
+  if (tile.herbs?.length) {
+    html += ` · <span class="tag-herb">Herbs: ${tile.herbs.map(h => escHtml(h.replace(/-/g,' ').replace(/\b\w/g, c => c.toUpperCase()))).join(', ')}</span>`;
+  }
+  if (tile.ores?.length) {
+    html += ` · <span class="tag-ore">Ores: ${tile.ores.map(o => escHtml(o.replace(/-/g,' ').replace(/\b\w/g, c => c.toUpperCase()))).join(', ')}</span>`;
+  }
+  if (tile.mobs?.length) {
+    html += ` · <span class="tag-mob">Mobs: ${tile.mobs.map(m => escHtml(m.replace(/-/g,' ').replace(/\b\w/g, c => c.toUpperCase()))).join(', ')}</span>`;
+  }
+  if (tile.drops?.length) {
+    html += ` · <span class="tag-drop">Drops: ${tile.drops.map(d => escHtml(d.replace(/-/g,' ').replace(/\b\w/g, c => c.toUpperCase()))).join(', ')}</span>`;
+  }
+  if (tile.afkable) html += ` <span class="tag-afk">⏳ AFK-farmable</span>`;
+
   if (tile.areaId) {
     html += ` &nbsp;<button class="btn-sm btn-primary" style="margin-left:.4rem" onclick="openZoneForArea('${escHtml(tile.areaId)}')">Explore</button>`;
   }
