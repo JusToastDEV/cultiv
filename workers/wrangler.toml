@@ -1,0 +1,45 @@
+name = "sealed-heavens-api"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+# ──────────────────────────────────────────────
+# D1 Database
+# After running: wrangler d1 create sealed-heavens-db
+# paste the returned database_id below
+# ──────────────────────────────────────────────
+[[d1_databases]]
+binding = "DB"
+database_name = "sealed-heavens-db"
+database_id = "PASTE_YOUR_D1_ID_HERE"
+
+# ──────────────────────────────────────────────
+# KV Namespaces
+# Run each of these, then paste the returned ids:
+#   wrangler kv namespace create SESSIONS
+#   wrangler kv namespace create COOLDOWNS
+#   wrangler kv namespace create WORLD_TICK
+# ──────────────────────────────────────────────
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "PASTE_YOUR_KV_SESSIONS_ID_HERE"
+
+[[kv_namespaces]]
+binding = "COOLDOWNS"
+id = "PASTE_YOUR_KV_COOLDOWNS_ID_HERE"
+
+[[kv_namespaces]]
+binding = "WORLD_TICK"
+id = "PASTE_YOUR_KV_WORLD_TICK_ID_HERE"
+
+# ──────────────────────────────────────────────
+# Cron triggers
+# NPC world tick fires every 6 hours
+# ──────────────────────────────────────────────
+[triggers]
+crons = ["0 */6 * * *"]
+
+# ──────────────────────────────────────────────
+# Secrets — set via `wrangler secret put <NAME>`, NOT in this file
+# JWT_SECRET           — random 256-bit hex string for signing JWTs
+# ADMIN_SETUP_KEY      — one-time key for promoting the first admin account
+# ──────────────────────────────────────────────

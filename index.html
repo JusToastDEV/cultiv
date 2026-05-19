@@ -18,6 +18,7 @@
       <div class="hero-meta">
         <span id="current-region">Region: Ashen Frontier</span>
         <span id="current-city">City: Ember Court</span>
+        <span id="current-area">Area: Cinder Steppe</span>
         <span id="realm-display">Realm: Mortal - Body Tempering</span>
       </div>
       <div class="hud-top">
@@ -32,78 +33,332 @@
           <div class="meter"><i id="qi-meter"></i></div>
         </div>
         <div class="hud-pill">
-          <strong>Longevity</strong>
+          <strong>Battle Qi</strong>
+          <span id="battle-qi-display">0 / 0</span>
+          <div class="meter"><i id="battle-qi-meter"></i></div>
+        </div>
+        <div class="hud-pill">
+          <strong>Years Left</strong>
           <span id="longevity-display">80 / 80</span>
           <div class="meter"><i id="longevity-meter"></i></div>
         </div>
       </div>
-      <div id="global-cooldown-note" class="global-cooldown-note">Cooldowns -> none</div>
+      <div id="global-cooldown-note" class="global-cooldown-note">Global Cooldown: Ready</div>
+      <div id="debuff-strip" class="debuff-strip hidden"></div>
     </header>
 
-    <section class="layout-grid">
-      <article class="card stats-card">
-        <h2>Core Status</h2>
-        <div class="stat-grid" id="stats-grid"></div>
-        <h3>Cultivation Paths</h3>
-        <div class="path-grid" id="path-grid"></div>
-      </article>
-
-      <article class="card progression-card">
-        <h2>Progression</h2>
-        <p id="breakthrough-note"></p>
-        <p id="cooldown-note"></p>
-        <div class="button-row">
-          <button data-action="meditate">Meditate</button>
-          <button data-action="breakthrough">Attempt Breakthrough</button>
-          <button data-action="learnTechnique">Learn Technique</button>
-        </div>
-        <div class="button-row">
-          <button data-action="trainBody">Body Cultivation</button>
-          <button data-action="trainSoul">Soul Cultivation</button>
-          <button data-action="trainSpirit">Spirit Cultivation</button>
-        </div>
-        <div class="button-row">
-          <button data-action="trainCraft">Craft Cultivation</button>
-          <button data-action="trainAlchemy">Alchemy Cultivation</button>
-        </div>
-      </article>
-
-      <article class="card economy-card">
-        <h2>Inventory and Storage</h2>
-        <div class="inventory-topline" id="inventory-topline"></div>
-        <div class="button-row">
-          <button data-action="hunt">Hunt Beast</button>
-          <button data-action="sell">Sell Materials</button>
-          <button data-action="bank">Bank Silver</button>
-        </div>
-        <div class="button-row">
-          <button data-action="buyRing">Buy/Upgrade Ring</button>
-          <button data-action="buyHome">Acquire Home</button>
-        </div>
-        <ul id="inventory-list" class="inventory-list"></ul>
-      </article>
-
-      <article class="card world-card">
-        <h2>World Map</h2>
-        <p>Travel through connected regions to unlock their cities and events.</p>
-        <div class="city-grid" id="region-grid"></div>
-        <h3>Regional Capitals</h3>
-        <div class="city-grid" id="city-grid"></div>
-      </article>
-
-      <article class="card events-card full-width">
-        <div class="events-header">
-          <h2>Event Log</h2>
-          <div class="button-row">
-            <button data-action="explore">Trigger Event</button>
-            <button data-action="save">Save</button>
-            <button data-action="reset">Reset</button>
+    <section class="hub-panel">
+      <!-- Quick Stats Header -->
+      <div class="hub-section hub-stats">
+        <div class="stat-row">
+          <div class="stat-group">
+            <span class="stat-label">Realm:</span>
+            <span id="hub-realm" class="stat-value">Mortal - Body Tempering</span>
+          </div>
+          <div class="stat-group">
+            <span class="stat-label">Location:</span>
+            <span id="hub-location" class="stat-value">Ember Court</span>
+          </div>
+          <div class="stat-group">
+            <span class="stat-label">Wallet:</span>
+            <span id="hub-wallet" class="stat-value">140 silver</span>
           </div>
         </div>
-        <ol id="event-log" class="event-log"></ol>
-      </article>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="hub-section hub-actions">
+        <h3>Cultivation & Progress</h3>
+        <div class="button-row">
+          <button data-action="meditate">Meditate</button>
+          <button data-action="trainBody">Train Body</button>
+          <button data-action="trainSoul">Train Soul</button>
+          <button data-action="breakthrough">Breakthrough</button>
+          <button id="btn-stop-action" data-action="cancelAction">Stop</button>
+        </div>
+        <div id="active-action-note" class="action-status"></div>
+      </div>
+
+      <!-- Current City Available Events -->
+      <div class="hub-section hub-events">
+        <h3>City Leads</h3>
+        <div class="button-row">
+            <button data-action="cityAction">City Affairs</button>
+            <button data-action="exploreArea">Scout Wilds</button>
+        </div>
+        <ul id="available-events-list" class="quest-list"></ul>
+      </div>
+
+      <!-- Event Log -->
+      <div class="hub-section hub-log">
+        <h3>Recent Events</h3>
+        <ol id="event-log" class="event-log-compact"></ol>
+      </div>
+
+      <!-- Hub Navigation -->
+      <div class="hub-section hub-nav">
+        <h3>Menus</h3>
+        <div class="button-row">
+          <button id="open-inventory" type="button">Inventory</button>
+          <button id="open-status" type="button">Status</button>
+          <button id="open-equipment" type="button">Equipment</button>
+          <button id="open-techniques" type="button">Techniques</button>
+          <button id="open-map" type="button">Map</button>
+        </div>
+        <div class="button-row">
+          <button id="open-patron-hall" type="button">Patron Hall</button>
+          <button id="open-bank" type="button">Bank</button>
+          <button id="open-battle" type="button">Battle</button>
+          <button data-action="save">Save</button>
+        </div>
+      </div>
     </section>
   </main>
+
+  <section id="inventory-modal" class="floating-panel hidden" aria-hidden="true">
+    <header id="inventory-drag-handle" class="floating-header">
+      <strong>Inventory Grid</strong>
+      <button id="close-inventory" type="button">Close</button>
+    </header>
+    <div class="floating-body">
+      <p id="inventory-selection-note">Select two slots to swap items. Drag and drop is also supported.</p>
+      <div id="inventory-grid" class="inventory-grid"></div>
+      <div id="inventory-detail-popover" class="inventory-detail-popover hidden"></div>
+    </div>
+  </section>
+
+  <section id="loot-modal" class="floating-panel hidden" aria-hidden="true">
+    <header id="loot-drag-handle" class="floating-header">
+      <strong>Battle Loot</strong>
+      <button id="close-loot" type="button">Close</button>
+    </header>
+    <div class="floating-body">
+      <p>Choose quick add or manual slot placement.</p>
+      <div class="button-row">
+        <button id="loot-quick-add" type="button">Quick Add All</button>
+      </div>
+      <ul id="loot-list" class="inventory-list"></ul>
+    </div>
+  </section>
+
+  <section id="bank-modal" class="floating-panel hidden" aria-hidden="true">
+    <header id="bank-drag-handle" class="floating-header">
+      <strong>Silver Vault</strong>
+      <button id="close-bank" type="button">Close</button>
+    </header>
+    <div class="floating-body">
+      <p id="bank-summary">Wallet: 0 | Bank: 0</p>
+      <div class="map-compact">
+        <label for="bank-amount">Amount</label>
+        <input id="bank-amount" type="number" min="1" value="20" class="bank-input" />
+        <button data-action="bank">Deposit</button>
+      </div>
+      <div class="map-compact">
+        <label for="withdraw-amount">Withdraw</label>
+        <input id="withdraw-amount" type="number" min="1" value="20" class="bank-input" />
+        <button data-action="withdraw">Withdraw</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="map-modal" class="floating-panel hidden" aria-hidden="true">
+    <header id="map-drag-handle" class="floating-header">
+      <strong>World Atlas</strong>
+      <button id="close-map" type="button">Close</button>
+    </header>
+    <div class="floating-body">
+      <div class="map-toolbar">
+        <button id="atlas-center-current" type="button">Center On Current</button>
+        <button id="atlas-reset-pan" type="button">Reset View</button>
+      </div>
+      <div id="atlas-viewport" class="atlas-viewport">
+        <div id="atlas-canvas" class="atlas-canvas"></div>
+      </div>
+      <div id="atlas-info" class="atlas-info">
+        Select a region or city icon.
+      </div>
+    </div>
+  </section>
+
+  <section id="battle-modal" class="floating-panel hidden" aria-hidden="true">
+    <header id="battle-drag-handle" class="floating-header">
+      <strong>Battle Command</strong>
+      <button id="close-battle" type="button">Close</button>
+    </header>
+    <div class="floating-body">
+      <p id="battle-modal-status" class="battle-round-label">No active battle.</p>
+      <!-- Versus display -->
+      <div class="battle-versus">
+        <div class="battle-side">
+          <div class="battle-side-label">You</div>
+          <div id="bm-player-name" class="battle-side-name">Cultivator</div>
+          <div class="battle-stat-row">
+            HP <span id="bm-player-hp">—</span>
+            <div class="battle-stat-bar"><div class="battle-stat-fill hp" id="bm-player-hp-bar" style="width:100%"></div></div>
+          </div>
+          <div class="battle-stat-row">
+            Qi <span id="bm-player-qi">—</span>
+            <div class="battle-stat-bar"><div class="battle-stat-fill qi" id="bm-player-qi-bar" style="width:100%"></div></div>
+          </div>
+          <div class="battle-stat-row">
+            Battle Qi <span id="bm-player-bqi">—</span>
+            <div class="battle-stat-bar"><div class="battle-stat-fill bqi" id="bm-player-bqi-bar" style="width:0%"></div></div>
+          </div>
+        </div>
+        <div class="battle-vs-divider">⚔</div>
+        <div class="battle-side">
+          <div class="battle-side-label">Enemy</div>
+          <div id="bm-enemy-name" class="battle-side-name">—</div>
+          <div class="battle-stat-row">
+            HP <span id="bm-enemy-hp">—</span>
+            <div class="battle-stat-bar"><div class="battle-stat-fill ehp" id="bm-enemy-hp-bar" style="width:100%"></div></div>
+          </div>
+          <div class="battle-stat-row">
+            Qi <span id="bm-enemy-qi">—</span>
+            <div class="battle-stat-bar"><div class="battle-stat-fill eqi" id="bm-enemy-qi-bar" style="width:100%"></div></div>
+          </div>
+        </div>
+      </div>
+      <!-- Basic actions -->
+      <div class="button-row">
+        <button data-action="battleAttack">Attack</button>
+        <button data-action="battleDefend">Defend</button>
+        <button data-action="battleFlee">Flee</button>
+      </div>
+      <!-- Battle Arts -->
+      <div class="battle-tech-label">Battle Arts (tap to use)</div>
+      <div id="battle-tech-list" class="battle-tech-list"></div>
+    </div>
+  </section>
+
+  <section id="techniques-modal" class="floating-panel hidden" aria-hidden="true">
+    <header id="techniques-drag-handle" class="floating-header">
+      <strong>Techniques</strong>
+      <button id="close-techniques" type="button">Close</button>
+    </header>
+    <div class="floating-body">
+      <div class="tech-tabs">
+        <button class="tech-tab active" id="tab-cultivation" type="button">Cultivation Arts</button>
+        <button class="tech-tab battle-tab" id="tab-battle" type="button">Battle Arts</button>
+      </div>
+      <div class="tech-loadout-grid">
+        <div class="tech-loadout">
+          <label for="body-technique">Active Body Method</label>
+          <select id="body-technique"></select>
+          <div id="active-body-summary" class="tech-active-summary"></div>
+        </div>
+        <div class="tech-loadout">
+          <label for="spirit-technique">Active Spirit Method</label>
+          <select id="spirit-technique"></select>
+          <div id="active-spirit-summary" class="tech-active-summary"></div>
+        </div>
+      </div>
+      <div id="tech-cultivation-panel" class="tech-panel"></div>
+      <div id="tech-battle-panel" class="tech-panel hidden"></div>
+    </div>
+  </section>
+
+  <section id="status-modal" class="floating-panel hidden" aria-hidden="true">
+    <header id="status-drag-handle" class="floating-header">
+      <strong>Core Status and Techniques</strong>
+      <button id="close-status" type="button">Close</button>
+    </header>
+    <div class="floating-body">
+      <div class="stat-grid" id="stats-grid"></div>
+      <h3>Active Debuffs</h3>
+      <div class="path-grid" id="status-debuffs"></div>
+      <h3>Learned Techniques</h3>
+      <div class="path-grid" id="path-grid"></div>
+    </div>
+  </section>
+
+  <section id="patron-modal" class="floating-panel hidden" aria-hidden="true">
+    <header id="patron-drag-handle" class="floating-header">
+      <strong>Support the Game</strong>
+      <button id="close-patron-hall" type="button">Close</button>
+    </header>
+    <div class="floating-body">
+      <p>This game is free to play. If you enjoy it, you can support development below.</p>
+      <div class="button-row">
+        <button id="patron-watch-ad" type="button">Watch Ad — Get 1 Technique Scroll</button>
+      </div>
+      <p class="map-meta" id="patron-ad-note"></p>
+      <p class="map-meta">More support options coming in the future. Thank you for playing Sealed Heavens.</p>
+    </div>
+  </section>
+
+  <section id="equipment-modal" class="floating-panel hidden" aria-hidden="true">
+    <header id="equipment-drag-handle" class="floating-header">
+      <strong>Character Equipment</strong>
+      <button id="close-equipment" type="button">Close</button>
+    </header>
+    <div class="floating-body">
+      <p id="equipment-topline" class="map-meta">No equipment equipped.</p>
+      <p id="equipment-summary" class="map-meta">No equipment equipped.</p>
+      <h3>Equipped Slots</h3>
+      <div id="equipment-grid" class="equipment-grid"></div>
+      <h3>Carried Gear Pack</h3>
+      <div id="equipment-pack" class="equipment-pack"></div>
+      <h3>Equipment Hall</h3>
+      <div id="equipment-store" class="equipment-store"></div>
+    </div>
+  </section>
+
+  <section id="interaction-modal" class="floating-panel hidden" aria-hidden="true">
+    <header id="interaction-drag-handle" class="floating-header">
+      <strong id="interaction-title">City Action</strong>
+      <button id="close-interaction" type="button">Close</button>
+    </header>
+    <div class="floating-body interaction-body">
+      <p id="interaction-subtitle" class="interaction-subtitle"></p>
+      <p id="interaction-text" class="interaction-text"></p>
+      <div id="interaction-tags" class="interaction-tags"></div>
+      <div id="interaction-check" class="interaction-check hidden"></div>
+      <div id="interaction-actions" class="interaction-actions"></div>
+    </div>
+  </section>
+
+  <!-- Backstory selection overlay (shown on first start) -->
+  <!-- Character Creation Overlay — multi-stage journey -->
+  <div id="character-creation-overlay" class="character-creation-overlay hidden" aria-modal="true" role="dialog">
+    <div class="creation-box">
+      <!-- Stage 1: Opening Scene -->
+      <div id="creation-stage-opening" class="creation-stage">
+        <h2>The Awakening</h2>
+        <div id="creation-opening-text" class="creation-text"></div>
+        <button type="button" class="btn-creation-next" id="btn-creation-open-to-path">Begin Your Choice</button>
+      </div>
+
+      <!-- Stage 2: Path Selection -->
+      <div id="creation-stage-paths" class="creation-stage hidden">
+        <h2>Your Origin</h2>
+        <p>Who were you before this moment? What shaped your cultivation?</p>
+        <div id="creation-path-cards" class="creation-cards"></div>
+      </div>
+
+      <!-- Stage 3: Nature Selection -->
+      <div id="creation-stage-natures" class="creation-stage hidden">
+        <h2>Your Nature</h2>
+        <p>How do you face the path ahead? What drives you forward?</p>
+        <div id="creation-nature-cards" class="creation-cards"></div>
+      </div>
+
+      <!-- Stage 4: Twist of Fate -->
+      <div id="creation-stage-fate" class="creation-stage hidden">
+        <h2>A Twist of Fate</h2>
+        <p>Before you step onto the path, the world marks you in ways beyond your choosing.</p>
+        <div id="creation-fate-card" class="fate-event-card"></div>
+        <button type="button" class="btn-creation-next" id="btn-creation-accept-fate">Accept Fate</button>
+      </div>
+
+      <!-- Stage 5: Summary & Confirmation -->
+      <div id="creation-stage-summary" class="creation-stage hidden">
+        <h2>Your Journey Begins</h2>
+        <div id="creation-summary-text" class="creation-summary"></div>
+        <button type="button" class="btn-creation-confirm" id="btn-creation-confirm">Enter the Sealed Heavens</button>
+      </div>
+    </div>
+  </div>
 
   <script src="data.js"></script>
   <script src="main.js"></script>
