@@ -179,7 +179,12 @@ function isMaterialItem(template) {
     && template.tags.length > 0;
 }
 
-function getCultivationMaterialCandidates(state, selectedItemIds = []) {
+function getCultivationMaterialCandidates(state, selectedItemIds = [], tpl = null) {
+  // Soul-pillar techniques do not allow improvised blending — only show explicit technique catalysts
+  const soulOnlyIds = tpl && tpl.pillar !== "body" && Array.isArray(tpl.materialCatalysts)
+    ? new Set(tpl.materialCatalysts.map((c) => c.itemId))
+    : null;
+
   const selectedCounts = selectedItemIds.reduce((counts, itemId) => {
     counts[itemId] = (counts[itemId] || 0) + 1;
     return counts;
@@ -190,6 +195,9 @@ function getCultivationMaterialCandidates(state, selectedItemIds = []) {
       return items;
     }
     seen.add(stack.id);
+    if (soulOnlyIds && !soulOnlyIds.has(stack.id)) {
+      return items;
+    }
     const template = getItemTemplate(stack.id);
     if (!isMaterialItem(template)) {
       return items;
@@ -325,7 +333,7 @@ function buildCultivationMaterialPlan(tpl, catalystOrItemId) {
 }
 
 function getTechniqueMaterialPlans(state, tpl, selectedItemIds = []) {
-  return getCultivationMaterialCandidates(state, selectedItemIds)
+  return getCultivationMaterialCandidates(state, selectedItemIds, tpl)
     .map((item) => {
       const plan = buildCultivationMaterialPlan(tpl, item.id);
       return plan ? {
@@ -1019,6 +1027,26 @@ function globalCooldownRemaining(state) {
 
 function setGlobalCooldown(state, extra = 0) {
   state.globalCooldownUntil = nowSeconds() + state.globalCooldownBase + extra;
+}
+
+const TECH_SWITCH_COOLDOWN_SECONDS = 3 * 24 * 3600; // 3 real days
+
+function techSwitchCooldownRemaining(state) {
+  return Math.max(0, (state.techSwitchCooldownUntil || 0) - nowSeconds());
+}
+
+function applyTechSwitchPenalty(state, oldTechId) {
+  // 1 stage rollback on the old technique (minimum 0)
+  if (oldTechId && state.learnedTechniques && state.learnedTechniques[oldTechId] > 0) {
+    state.learnedTechniques[oldTechId] = Math.max(0, state.learnedTechniques[oldTechId] - 1);
+    pushLog(state, `[BAD] Severing from ${getTechniqueTemplate(oldTechId)?.label || oldTechId}: 1 stage of refinement lost.`, "bad");
+  }
+  // 20% Qi loss
+  const qiLoss = Math.floor(state.qi * 0.2);
+  state.qi = Math.max(0, state.qi - qiLoss);
+  if (qiLoss > 0) pushLog(state, `[BAD] Qi fractured by path severance: -${qiLoss} Qi.`, "bad");
+  // 3-day cooldown before switching again
+  state.techSwitchCooldownUntil = nowSeconds() + TECH_SWITCH_COOLDOWN_SECONDS;
 }
 
 function isRegionAdjacent(state, targetRegionId) {
@@ -5226,15 +5254,25 @@ function renderTechniquesPanel(state) {
       if (!techId || !(state.learnedTechniques?.[techId] > 0)) {
         return;
       }
-      if (pillar === "body") {
-        state.activeBodyTechniqueId = techId;
-        pushLog(state, `Active body method changed to ${getTechniqueTemplate(techId)?.label || techId}.`, "good");
-      } else {
-        state.activeSoulTechniqueId = techId;
-        state.meditationTechniqueId = techId;
-        pushLog(state, `Active spirit method changed to ${getTechniqueTemplate(techId)?.label || techId}.`, "good");
+      const currentId = pillar === "body" ? state.activeBodyTechniqueId : state.activeSoulTechniqueId;
+      if (currentId === techId) return; // Already active — no penalty
+      if (techSwitchCooldownRemaining(state) > 0) {
+        pushLog(state, `[BAD] Path is still healing — cannot sever for ${formatSeconds(techSwitchCooldownRemaining(state))}.`, "bad");
+        render(state);
+        return;
       }
-      render(state);
+      // Show confirm overlay
+      const overlay = document.getElementById("tech-switch-overlay");
+      const warning = document.getElementById("tech-switch-warning");
+      if (overlay && warning) {
+        const oldTpl = getTechniqueTemplate(currentId);
+        const newTpl = getTechniqueTemplate(techId);
+        warning.textContent = `You are severing your bond with "${oldTpl?.label || currentId}" to walk the path of "${newTpl?.label || techId}". This cannot be undone cheaply.`;
+        overlay.classList.remove("hidden");
+        overlay._pendingTechId = techId;
+        overlay._pendingPillar = pillar;
+        overlay._pendingOldId = currentId;
+      }
     });
   });
 
@@ -5374,6 +5412,28 @@ function render(state) {
     }
   });
 
+  // Action ribbon — persistent indicator below topbar
+  const ribbon = document.getElementById("action-ribbon");
+  const ribbonText = document.getElementById("action-ribbon-text");
+  const ribbonCancel = document.getElementById("action-ribbon-cancel");
+  if (ribbon && ribbonText) {
+    if (!state.activeAction) {
+      ribbon.classList.add("hidden");
+    } else {
+      const actTpl = getTechniqueTemplate(state.activeAction.techniqueId);
+      const actLabel = state.activeAction.action === "cityRest"
+        ? getCurrentCity(state).name
+        : (actTpl ? actTpl.label : (state.activeAction.techniqueId || "—"));
+      const catalystLabel = Array.isArray(state.activeAction.catalystPlans) && state.activeAction.catalystPlans.length > 0
+        ? ` + ${state.activeAction.catalystPlans.map((plan) => plan.label).join(", ")}`
+        : "";
+      const remaining = formatSeconds(state.activeAction.endAt - nowSeconds());
+      ribbonText.textContent = `${state.activeAction.action} · ${actLabel}${catalystLabel} — ${remaining} remaining`;
+      ribbon.classList.remove("hidden");
+    }
+    if (ribbonCancel) ribbonCancel.style.display = state.activeAction ? "" : "none";
+  }
+
   if (!state.activeAction) {
     document.getElementById("active-action-note").textContent = "No active action.";
   } else {
@@ -5387,6 +5447,20 @@ function render(state) {
     document.getElementById("active-action-note").textContent =
       `Active: ${state.activeAction.action} (${actLabel}${catalystLabel}) → ${formatSeconds(state.activeAction.endAt - nowSeconds())}`;
   }
+
+  // Profile panel quick stats
+  const profileRealm = document.getElementById("profile-realm");
+  if (profileRealm) profileRealm.textContent = getRealm(state)?.label || "—";
+  const profileTurn = document.getElementById("profile-turn");
+  if (profileTurn) profileTurn.textContent = state.turn ?? "—";
+  const profileLongevity = document.getElementById("profile-longevity");
+  if (profileLongevity) profileLongevity.textContent = `${state.longevityCurrent ?? "—"}/${state.longevityMax ?? "—"}`;
+  const profileWallet = document.getElementById("profile-wallet");
+  if (profileWallet) profileWallet.textContent = `${state.wallet ?? 0} silver`;
+  const profileBody = document.getElementById("profile-body");
+  if (profileBody) profileBody.textContent = getBodyLevel(state) ?? "—";
+  const profileSoul = document.getElementById("profile-soul");
+  if (profileSoul) profileSoul.textContent = getSoulLevel(state) ?? "—";
 
   const statsGrid = document.getElementById("stats-grid");
   if (statsGrid) {
@@ -5697,16 +5771,83 @@ function bootstrap() {
   const bodySelect = document.getElementById("body-technique");
   if (bodySelect) {
     bodySelect.addEventListener("change", (event) => {
-      state.activeBodyTechniqueId = event.target.value;
-      render(state);
+      const newId = event.target.value;
+      if (!newId || newId === state.activeBodyTechniqueId) return;
+      if (techSwitchCooldownRemaining(state) > 0) {
+        event.target.value = state.activeBodyTechniqueId; // revert
+        pushLog(state, `[BAD] Path is still healing — cannot sever for ${formatSeconds(techSwitchCooldownRemaining(state))}.`, "bad");
+        render(state);
+        return;
+      }
+      const overlay = document.getElementById("tech-switch-overlay");
+      const warning = document.getElementById("tech-switch-warning");
+      if (overlay && warning) {
+        const oldTpl = getTechniqueTemplate(state.activeBodyTechniqueId);
+        const newTpl = getTechniqueTemplate(newId);
+        warning.textContent = `You are severing your bond with "${oldTpl?.label || state.activeBodyTechniqueId}" to walk the path of "${newTpl?.label || newId}". This cannot be undone cheaply.`;
+        overlay.classList.remove("hidden");
+        overlay._pendingTechId = newId;
+        overlay._pendingPillar = "body";
+        overlay._pendingOldId = state.activeBodyTechniqueId;
+        event.target.value = state.activeBodyTechniqueId; // revert until confirmed
+      }
     });
   }
   const spiritSelect = document.getElementById("spirit-technique");
   if (spiritSelect) {
     spiritSelect.addEventListener("change", (event) => {
-      state.activeSoulTechniqueId = event.target.value;
-      state.meditationTechniqueId = event.target.value;
+      const newId = event.target.value;
+      if (!newId || newId === state.activeSoulTechniqueId) return;
+      if (techSwitchCooldownRemaining(state) > 0) {
+        event.target.value = state.activeSoulTechniqueId; // revert
+        pushLog(state, `[BAD] Path is still healing — cannot sever for ${formatSeconds(techSwitchCooldownRemaining(state))}.`, "bad");
+        render(state);
+        return;
+      }
+      const overlay = document.getElementById("tech-switch-overlay");
+      const warning = document.getElementById("tech-switch-warning");
+      if (overlay && warning) {
+        const oldTpl = getTechniqueTemplate(state.activeSoulTechniqueId);
+        const newTpl = getTechniqueTemplate(newId);
+        warning.textContent = `You are severing your bond with "${oldTpl?.label || state.activeSoulTechniqueId}" to walk the path of "${newTpl?.label || newId}". This cannot be undone cheaply.`;
+        overlay.classList.remove("hidden");
+        overlay._pendingTechId = newId;
+        overlay._pendingPillar = "soul";
+        overlay._pendingOldId = state.activeSoulTechniqueId;
+        event.target.value = state.activeSoulTechniqueId; // revert until confirmed
+      }
+    });
+  }
+
+  // Technique switch confirm overlay handlers
+  const techSwitchOverlay = document.getElementById("tech-switch-overlay");
+  if (techSwitchOverlay) {
+    document.getElementById("btn-tech-switch-confirm").addEventListener("click", () => {
+      const newId = techSwitchOverlay._pendingTechId;
+      const pillar = techSwitchOverlay._pendingPillar;
+      const oldId = techSwitchOverlay._pendingOldId;
+      if (!newId) { techSwitchOverlay.classList.add("hidden"); return; }
+      applyTechSwitchPenalty(state, oldId);
+      if (pillar === "body") {
+        state.activeBodyTechniqueId = newId;
+        pushLog(state, `[GOOD] Now walking the path of ${getTechniqueTemplate(newId)?.label || newId} (Body).`, "good");
+      } else {
+        state.activeSoulTechniqueId = newId;
+        state.meditationTechniqueId = newId;
+        pushLog(state, `[GOOD] Now walking the path of ${getTechniqueTemplate(newId)?.label || newId} (Spirit).`, "good");
+      }
+      techSwitchOverlay._pendingTechId = null;
+      techSwitchOverlay._pendingPillar = null;
+      techSwitchOverlay._pendingOldId = null;
+      techSwitchOverlay.classList.add("hidden");
       render(state);
+      broadcastState();
+    });
+    document.getElementById("btn-tech-switch-cancel").addEventListener("click", () => {
+      techSwitchOverlay._pendingTechId = null;
+      techSwitchOverlay._pendingPillar = null;
+      techSwitchOverlay._pendingOldId = null;
+      techSwitchOverlay.classList.add("hidden");
     });
   }
 
@@ -6007,6 +6148,25 @@ function bootstrap() {
         if (state.ui.creationFate && typeof state.ui.creationFate.apply === "function") {
           state.ui.creationFate.apply(state);
         }
+
+        // Grant origin-linked starter techniques
+        // Each origin provides a thematically appropriate body + soul method at level 1
+        const ORIGIN_TECHNIQUES = {
+          "sect-trained": { body: "iron-skin-sutra",     soul: "silent-mind-sutra"      }, // standard sect curriculum
+          "wild-born":    { body: "jade-body-tempering", soul: "dream-lotus-meditation" }, // herb-based, nature-aligned
+          "cursed-child": { body: "iron-skin-sutra",     soul: "dream-lotus-meditation" }, // stabilize cursed meridians + deep perception
+        };
+        const originTechs = ORIGIN_TECHNIQUES[state.ui.creationPath.id] || ORIGIN_TECHNIQUES["sect-trained"];
+        // Ensure both techniques are known at level 1 (only set if not already higher)
+        state.learnedTechniques = state.learnedTechniques || {};
+        if (!(state.learnedTechniques[originTechs.body] > 0)) state.learnedTechniques[originTechs.body] = 1;
+        if (!(state.learnedTechniques[originTechs.soul] > 0)) state.learnedTechniques[originTechs.soul] = 1;
+        state.activeBodyTechniqueId = originTechs.body;
+        state.activeSoulTechniqueId = originTechs.soul;
+        state.meditationTechniqueId = originTechs.soul;
+        // Remove the default techniques if origin replaced them
+        if (originTechs.body !== "iron-skin-sutra") delete state.learnedTechniques["iron-skin-sutra"];
+        if (originTechs.soul !== "silent-mind-sutra") delete state.learnedTechniques["silent-mind-sutra"];
         
         // Convert any pending scrolls
         const scrollsBefore = 0;
@@ -6016,7 +6176,9 @@ function bootstrap() {
         const pathTitle = state.ui.creationPath.title;
         const natureTitle = state.ui.creationNature.title;
         const fateTitle = state.ui.creationFate ? ` Fate: ${state.ui.creationFate.title}.` : "";
-        pushLog(state, `You are ${pathTitle}. Your nature is ${natureTitle}.${fateTitle} Your journey begins.`, "good");
+        const bodyLabel = getTechniqueTemplate(originTechs.body)?.label || originTechs.body;
+        const soulLabel = getTechniqueTemplate(originTechs.soul)?.label || originTechs.soul;
+        pushLog(state, `You are ${pathTitle}. Your nature is ${natureTitle}.${fateTitle} Your journey begins. Starting methods: ${bodyLabel} (body) · ${soulLabel} (soul).`, "good");
         recalculateDerivedStats(state);
         overlay.classList.add("hidden");
         

@@ -1517,6 +1517,10 @@ button.btn-locked {
 .char-logout { margin-top:1.2rem; }
 
 .game-shell { display:flex;flex-direction:column;height:100dvh;overflow:hidden;background:var(--bg-0); }
+.action-ribbon { flex-shrink:0;background:linear-gradient(90deg,rgba(125,26,26,.22),rgba(139,105,20,.18));border-bottom:1px solid rgba(201,162,50,.2);display:flex;align-items:center;justify-content:space-between;padding:4px 1rem;font-size:.8rem;color:var(--ink-1);letter-spacing:.04em; }
+.action-ribbon.hidden { display:none; }
+.action-ribbon #action-ribbon-text { font-family:Cinzel,serif;color:var(--bronze-light);font-size:.78rem; }
+.btn-xs { padding:2px 8px;font-size:.72rem;line-height:1.4; }
 .topbar { height:52px;flex-shrink:0;background:var(--bg-1);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:1rem;padding:0 1rem;z-index:50; }
 .topbar-brand { display:flex;align-items:center;gap:.4rem;min-width:0; }
 .topbar-logo { font-size:1.1rem;font-family:Cinzel,serif;color:var(--bronze-light); }
@@ -1566,6 +1570,11 @@ button.btn-locked {
 .text-muted { color:var(--ink-2);font-size:.84rem; }
 .panel-grid-2 { display:grid;grid-template-columns:1fr 1fr;gap:1rem; }
 .panel-grid-3 { display:grid;grid-template-columns:repeat(3,1fr);gap:1rem; }
+.profile-stat-list { display:grid;grid-template-columns:auto 1fr;gap:.25rem .75rem;margin:0;font-size:.85rem; }
+.profile-stat-list dt { color:var(--ink-2); }
+.profile-stat-list dd { color:var(--ink-0);margin:0; }
+.city-district-card { display:flex;flex-direction:column;gap:.5rem; }
+.city-district-card .card-desc { flex:1; }
 
 .btn-primary { background:linear-gradient(180deg,var(--lacquer-light),var(--lacquer));color:var(--ink-0);border:1px solid rgba(125,26,26,.6);border-radius:5px;padding:.52rem 1rem;font-size:.88rem;cursor:pointer;transition:filter .15s,opacity .15s;font-family:inherit;letter-spacing:.02em; }
 .btn-primary:hover:not(:disabled) { filter:brightness(1.15); }
@@ -1664,3 +1673,12 @@ button.btn-locked {
 
 @media (max-width:900px) { .panel-grid-3 { grid-template-columns:1fr 1fr; } .explore-layout { grid-template-columns:1fr; } }
 @media (max-width:640px) { .panel-grid-2,.panel-grid-3 { grid-template-columns:1fr; } .topbar-stats .tb-stat:nth-child(n+3) { display:none; } .sidebar { position:fixed;left:-220px;top:56px;bottom:0;width:220px;z-index:200;transition:left .2s;border-right:none;box-shadow:4px 0 20px rgba(0,0,0,.4); } .sidebar.open { left:0; } .tb-menu-toggle { display:block; } .tech-loadout-grid { grid-template-columns:1fr; } }
+
+/* Technique switch confirmation overlay */
+.tech-switch-overlay { position:fixed;inset:0;z-index:500;background:rgba(4,2,10,.92);display:flex;align-items:center;justify-content:center;padding:1.5rem; }
+.tech-switch-overlay.hidden { display:none; }
+.tech-switch-box { max-width:520px;width:100%;background:var(--bg-1);border:2px solid var(--lacquer);border-radius:10px;padding:2rem;color:var(--ink); }
+.tech-switch-title { font-family:Cinzel,serif;color:var(--lacquer-light);margin:0 0 .8rem; }
+.tech-switch-warning { color:var(--ink-1);margin:.5rem 0; }
+.tech-switch-penalties { color:var(--ink-1);margin:.75rem 0 1rem 1.2rem;padding:0;line-height:1.8; }
+.tech-switch-penalties strong { color:var(--bronze-light); }

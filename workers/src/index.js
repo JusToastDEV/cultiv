@@ -14,7 +14,6 @@
  *   GET  /api/zones
  *   GET  /api/zones/:id
  *   GET  /api/inventory
- *   GET  /api/afk
  *   GET  /api/world/events
  *   GET  /api/world/history
  *   POST /api/world/events/:id/participate
@@ -22,7 +21,7 @@
  */
 
 import { handleAuth } from './auth.js';
-import { handleCharacters, handleGameState, handleGameAction, handleZones, handleInventory, handleAfk } from './game.js';
+import { handleCharacters, handleGameState, handleGameAction, handleZones, handleInventory } from './game.js';
 import { handleWorldEvents } from './world.js';
 import { handleAdmin } from './admin.js';
 import { getSessionAccount, corsHeaders } from './utils.js';
@@ -88,11 +87,6 @@ export default {
       // ── Inventory ───────────────────────────────────────────
       if (path.startsWith('/api/inventory')) {
         return await handleInventory(request, env, account, path);
-      }
-
-      // ── AFK status ──────────────────────────────────────────
-      if (path.startsWith('/api/afk')) {
-        return await handleAfk(request, env, account, path);
       }
 
       // ── World events ────────────────────────────────────────
