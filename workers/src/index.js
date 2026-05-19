@@ -49,6 +49,10 @@ export default {
         if (env.ASSETS) {
           const assetResp = await env.ASSETS.fetch(request);
           if (assetResp.status !== 404) return assetResp;
+          const isAssetLikePath = path.startsWith('/.') || /\/[^/]+\.[^/]+$/.test(path);
+          if (isAssetLikePath) {
+            return json({ error: 'Not found' }, 404, request);
+          }
           return env.ASSETS.fetch(new URL('/', request.url).toString());
         }
         return json({ error: 'Not found' }, 404, request);

@@ -25,7 +25,7 @@
     </div>
 
     <form id="login-form" class="auth-form">
-      <label>Email<input type="email" id="login-email" autocomplete="email" required /></label>
+      <label>Username or Email<input type="text" id="login-identifier" autocomplete="username" required /></label>
       <label>Password<input type="password" id="login-password" autocomplete="current-password" required /></label>
       <button type="submit" class="btn-primary">Enter the Heavens</button>
       <p id="login-error" class="auth-error"></p>
@@ -33,7 +33,7 @@
 
     <form id="register-form" class="auth-form hidden">
       <label>Username<input type="text" id="reg-username" autocomplete="username" minlength="3" maxlength="24" required /></label>
-      <label>Email<input type="email" id="reg-email" autocomplete="email" required /></label>
+      <label>Email (optional)<input type="email" id="reg-email" autocomplete="email" /></label>
       <label>Password<input type="password" id="reg-password" autocomplete="new-password" minlength="8" required /></label>
       <button type="submit" class="btn-primary">Forge Your Destiny</button>
       <p id="register-error" class="auth-error"></p>

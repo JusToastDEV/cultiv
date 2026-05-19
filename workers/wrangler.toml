@@ -6,9 +6,12 @@ compatibility_flags = ["nodejs_compat"]
 # Serve static files from the repo root (index.html, app.js, styles.css, etc.)
 # Worker runs first so /api/* routes are handled before file lookup
 [assets]
-directory = ".."
+directory = "./dist"
 run_worker_first = true
 binding = "ASSETS"
+
+[build]
+command = "node ./scripts/build-assets.mjs"
 
 # ──────────────────────────────────────────────
 # D1 Database

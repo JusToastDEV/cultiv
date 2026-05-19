@@ -1,66 +1,92 @@
-# Sealed Heavens Prototype
+# Sealed Heavens V2
 
-A browser-based cultivation game prototype with:
-- Realm and stage breakthroughs across an expanding cultivation ladder
-- Separate body and soul cultivation methods
-- Multi-material body cultivation blending with recommended catalysts
-- HP, Qi, Battle Qi, and Longevity HUD systems
-- Second-based active actions and global cooldowns
-- Inventory, ring, housing, hunting, factions, experts, and events
-- City economy with equipment halls, material caches, scripture auctions, and training services
-- Region-based world map exploration
+Sealed Heavens is a browser-based cultivation MMO in active rework.
+The current live build runs on a Cloudflare Worker that serves both the API and the static frontend.
 
-## Current Realm Ladder
-- Mortal
-- Qi Condensation
-- Foundation
-- Core Formation
-- Nascent Soul
-- Soul Formation
-- Void Refinement
-- Saint Ascension
-- Immortal Lord
-- Dao Sovereign
+## Current State
 
-Note:
-- The prototype structurally supports the extended realm ladder through `GAME_CONSTANTS.realms`.
-- Content depth for the newest realms is only partially implemented so far.
+- Plain HTML, CSS, and JS frontend
+- Cloudflare Worker backend
+- D1 for durable game data
+- KV for sessions and other ephemeral state
+- Staged asset deploys from `workers/dist`
+- Username-first auth with optional email on registration
 
-## Current Major Systems
-- Data-driven event and city interaction modal flow
-- Guild and sect standing
-- Recruitable city cultivation experts
-- Area-themed battle loot with rare scroll drops
-- Larger city shops and silver sinks
-- Technique switching with grades, buffs, drawbacks, and catalyst summaries
+## Important Project Docs
 
-## Run Locally
-Open [index.html](index.html) in a browser.
+- `VISION_V2.md` for the current product direction
+- `RESEARCH_CULTIVATION_SYSTEMS.md` for the reference synthesis behind that direction
 
-## Deploy to GitHub Pages
-This repo includes a workflow at [.github/workflows/github-pages.yml](.github/workflows/github-pages.yml).
+## Local Run
 
-1. Create a GitHub repository.
-2. Push this folder to `main`.
-3. In GitHub: Settings -> Pages -> Build and deployment -> Source: GitHub Actions.
-4. Wait for the workflow to finish, then use the generated `*.github.io` URL.
+Open `index.html` in a browser for static frontend work.
 
-## Deploy to Cloudflare Pages (Testing)
-1. In Cloudflare dashboard, open Pages -> Create a project -> Connect to Git.
-2. Select your GitHub repo.
-3. Build settings:
-- Framework preset: None
-- Build command: (leave blank)
-- Build output directory: `/`
-4. Save and Deploy.
+For live-service testing, run the Worker stack instead of relying on offline-only behavior.
 
-### Notes
-- This project is static HTML/CSS/JS, so no build step is required.
-- Game saves use browser localStorage per domain.
+## Production Architecture
 
-## Next Steps
-- Expand high-realm events, manuals, and cities beyond Soul Formation.
-- Add alchemy, poison crafting, and more expert-led production systems.
-- Split city services into dedicated halls as the city economy grows.
-- Move cooldown authority to a backend service for anti-cheat if the project becomes networked.
-- Add account auth and server-validated economy/combat only if the prototype becomes a live service.
+Production currently deploys like this:
+
+`GitHub main -> GitHub Actions -> Cloudflare Worker + Workers Assets -> D1 + KV`
+
+The Worker is the source of truth for auth and live gameplay.
+The staged asset build prevents accidental upload of repo internals.
+
+## Safe GitHub Update Flow
+
+Use one real git clone as the source of truth.
+Do not edit one local copy and push another.
+
+Recommended flow:
+
+1. Run `git status --short` before you touch anything.
+2. Make the change in the real repo clone.
+3. Stage both frontend assets and Worker files when they belong to the same feature.
+4. Commit once the feature is internally consistent.
+5. Push to `main`.
+6. Confirm `.github/workflows/deploy-workers.yml` completed successfully.
+7. Smoke test the live site.
+
+Useful command set:
+
+```powershell
+git status --short
+git add -A
+git commit -m "Describe the feature or fix"
+git push origin main
+```
+
+If root assets changed but were not committed, production will drift.
+If Worker files changed but the asset staging config did not deploy with them, production can also drift.
+
+## Live Auth Contract
+
+- Register accepts `username` and `password`
+- `email` is optional
+- Login accepts `identifier` plus `password`
+- `identifier` can be a username or an email
+
+## Manual Fallback Deploy
+
+From `workers/`:
+
+```powershell
+$env:PATH = "C:\Program Files\nodejs;$env:PATH"
+& "C:\Program Files\nodejs\npx.cmd" wrangler deploy
+```
+
+Use this when GitHub Actions has not caught up yet or when production needs an immediate fix.
+
+## Minimum Smoke Tests After Deploy
+
+- `GET /api/auth/session`
+- register a throwaway account
+- login with the throwaway username
+- probe a missing file path such as `/.git/index` and confirm it does not expose repo contents
+
+## Current Priorities
+
+- replace prototype onboarding with the V2 intro sequence
+- deepen progression loops without bloating the interface
+- add safer content-authoring and staging workflows
+- expand NPC, faction, and world-state simulation

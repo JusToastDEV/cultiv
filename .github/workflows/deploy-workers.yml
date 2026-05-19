@@ -6,6 +6,18 @@ on:
       - main
     paths:
       - 'workers/**'
+      - 'index.html'
+      - 'app.js'
+      - 'main.js'
+      - 'data.js'
+      - 'styles.css'
+      - 'manifest.json'
+      - 'sw.js'
+      - 'imgs/**'
+      - 'css/**'
+      - 'js/**'
+      - '.github/workflows/deploy-workers.yml'
+  workflow_dispatch:
 
 jobs:
   deploy:

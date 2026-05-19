@@ -35,25 +35,30 @@ async function register(request, env) {
   try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400, request); }
 
   const { username, email, password } = body;
+  const normalizedUsername = typeof username === 'string' ? username.trim() : '';
+  const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
 
   // Validate inputs
-  if (!username || !email || !password) {
-    return json({ error: 'username, email, and password are required' }, 400, request);
+  if (!normalizedUsername || !password) {
+    return json({ error: 'username and password are required' }, 400, request);
   }
-  if (!/^[a-zA-Z0-9_]{3,24}$/.test(username)) {
+  if (!/^[a-zA-Z0-9_]{3,24}$/.test(normalizedUsername)) {
     return json({ error: 'Username must be 3–24 alphanumeric characters or underscores' }, 400, request);
   }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  if (normalizedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
     return json({ error: 'Invalid email address' }, 400, request);
   }
   if (password.length < 8) {
     return json({ error: 'Password must be at least 8 characters' }, 400, request);
   }
 
-  // Check for existing username/email
-  const existing = await env.DB.prepare(
-    'SELECT id FROM accounts WHERE username = ?1 OR email = ?2'
-  ).bind(username, email.toLowerCase()).first();
+  const existing = normalizedEmail
+    ? await env.DB.prepare(
+      'SELECT id FROM accounts WHERE LOWER(username) = ?1 OR email = ?2'
+    ).bind(normalizedUsername.toLowerCase(), normalizedEmail).first()
+    : await env.DB.prepare(
+      'SELECT id FROM accounts WHERE LOWER(username) = ?1'
+    ).bind(normalizedUsername.toLowerCase()).first();
 
   if (existing) {
     return json({ error: 'Username or email already in use' }, 409, request);
@@ -63,17 +68,23 @@ async function register(request, env) {
   const passwordHash = await hashPassword(password);
   const accountId = generateUUID();
   const now = Date.now();
+  const storedEmail = normalizedEmail || `${accountId}@local.invalid`;
 
   await env.DB.prepare(
     `INSERT INTO accounts (id, username, email, password_hash, created_at)
      VALUES (?1, ?2, ?3, ?4, ?5)`
-  ).bind(accountId, username, email.toLowerCase(), passwordHash, now).run();
+  ).bind(accountId, normalizedUsername, storedEmail, passwordHash, now).run();
 
-  await auditLog(env, { accountId, action: 'register', data: { username }, ip: getIP(request) });
+  await auditLog(env, {
+    accountId,
+    action: 'register',
+    data: { username: normalizedUsername, hasEmail: Boolean(normalizedEmail) },
+    ip: getIP(request)
+  });
 
   // Issue session immediately
   const token = await issueSession(env, accountId, request);
-  return json({ ok: true, username, accountId }, 201, request, token);
+  return json({ ok: true, username: normalizedUsername, accountId }, 201, request, token);
 }
 
 // ── Login ─────────────────────────────────────────────────────
@@ -81,9 +92,17 @@ async function login(request, env) {
   let body;
   try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400, request); }
 
-  const { email, password } = body;
-  if (!email || !password) {
-    return json({ error: 'email and password are required' }, 400, request);
+  const identifier = typeof body.identifier === 'string'
+    ? body.identifier.trim()
+    : typeof body.email === 'string'
+      ? body.email.trim()
+      : typeof body.username === 'string'
+        ? body.username.trim()
+        : '';
+  const password = body.password;
+
+  if (!identifier || !password) {
+    return json({ error: 'username or email and password are required' }, 400, request);
   }
 
   // Rate limiting via KV
@@ -95,16 +114,17 @@ async function login(request, env) {
     return json({ error: 'Too many login attempts. Try again in 15 minutes.' }, 429, request);
   }
 
+  const normalizedIdentifier = identifier.toLowerCase();
   const account = await env.DB.prepare(
-    'SELECT * FROM accounts WHERE email = ?1'
-  ).bind(email.toLowerCase()).first();
+    'SELECT * FROM accounts WHERE LOWER(username) = ?1 OR email = ?2'
+  ).bind(normalizedIdentifier, normalizedIdentifier).first();
 
   if (!account || !(await verifyPassword(password, account.password_hash))) {
     // Increment rate limit counter
     await env.SESSIONS.put(rateLimitKey, JSON.stringify({ attempts: attempts + 1 }), {
       expirationTtl: Math.ceil(LOGIN_RATE_LIMIT_WINDOW_MS / 1000)
     });
-    return json({ error: 'Invalid email or password' }, 401, request);
+    return json({ error: 'Invalid username/email or password' }, 401, request);
   }
 
   // Clear rate limit on success

@@ -71,10 +71,10 @@ function setupAuthUI() {
   // Login form
   document.getElementById('login-form').addEventListener('submit', async e => {
     e.preventDefault();
-    const email    = document.getElementById('login-email').value.trim();
+    const identifier = document.getElementById('login-identifier').value.trim();
     const password = document.getElementById('login-password').value;
     setAuthError('login', '');
-    const r = await API.post('/api/auth/login', { email, password });
+    const r = await API.post('/api/auth/login', { identifier, password });
     if (r.ok) {
       _account = r.data;
       await enterGame();
@@ -126,7 +126,7 @@ function setAuthError(form, msg) {
 
 async function tryAutoLogin() {
   const r = await API.get('/api/auth/session');
-  if (r.ok && r.data.id) {
+  if (r.ok && r.data.authenticated) {
     _account = r.data;
     await enterGame();
   } else {
