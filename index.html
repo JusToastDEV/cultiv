@@ -207,28 +207,21 @@
 
        <section id="panel-explore" class="panel hidden">
          <div class="panel-header">
-           <h2>World Atlas</h2>
-           <span class="panel-meta" id="explore-realm-label">Your realm determines accessible zones</span>
+           <h2>World</h2>
+           <span class="panel-meta" id="explore-realm-label">Ashen Frontier · Mortal</span>
          </div>
 
-         <div class="atlas-viewport" id="atlas-viewport">
-           <div class="atlas-canvas" id="atlas-canvas"></div>
-         </div>
-         <div class="atlas-info" id="atlas-info">Select a region, city, or area on the map.</div>
-
-         <div class="explore-layout mt-md">
-           <div class="zone-list-col">
-             <div class="card">
-               <h3>Zones</h3>
-               <div id="zone-list" class="zone-list"></div>
-             </div>
-           </div>
-           <div class="zone-detail-col">
-             <div class="card" id="zone-detail-card">
-               <p class="text-muted">Select a zone to explore.</p>
-             </div>
+         <div class="tile-map-wrap" id="tile-map-wrap">
+           <div class="tile-grid" id="tile-grid"></div>
+           <div class="tile-map-legend">
+             <span title="Your position">⊕ You</span>
+             <span title="City">⌂ City</span>
+             <span title="Spirit Vein">◎ Vein</span>
+             <span title="Ancient Ruin / Exploration Zone">✦ Zone</span>
+             <span title="Wilderness Zone">≋ Wild</span>
            </div>
          </div>
+         <div class="tile-info-bar" id="tile-info">Click adjacent tiles (highlighted in gold) to move through the world.</div>
        </section>
 
 

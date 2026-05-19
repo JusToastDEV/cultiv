@@ -541,7 +541,7 @@ function activatePanel(panelId) {
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === `panel-${panelId}`));
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('hidden', p.id !== `panel-${panelId}`));
   // Lazy-load panel data
-  if (panelId === 'explore' && _character) { renderAtlasMap(); loadZones(); }
+  if (panelId === 'explore' && _character) renderTileMap();
   if (panelId === 'inventory') loadInventory();
   if (panelId === 'admin') loadAdminFeatures();
   if (panelId === 'account') loadAccountInfo();
@@ -594,6 +594,7 @@ function renderAll() {
   if (!_gameState || !_character) return;
   renderTopBar();
   renderCultivatePanel();
+  if (document.getElementById('panel-explore')?.classList.contains('active')) renderTileMap();
 }
 
 function renderTopBar() {
@@ -877,12 +878,235 @@ function appendToLog(text) {
   while (log.children.length > 30) log.lastElementChild.remove();
 }
 
-// ── Zone Explore panel ─────────────────────────────────────────
+// ── Tile-based World Map ───────────────────────────────────────
 
-// Static world data for atlas rendering (mirrors server GAME_CONSTANTS)
-const WORLD_DATA = {
-  regions: [
-    { id: 'ashen-frontier',   name: 'Ashen Frontier',    world: 'Ashen World',    danger: 'Low',         resources: 'Herbs, low-tier ores',        neighbors: ['jade-delta','iron-wilds'] },
+// Ashen Frontier tile definitions. Missing keys → open land.
+// t: M=mountain R=road C=city W=wild-zone F=forest X=ruin V=spirit-vein .=open
+const AF_SPECIAL = new Map([
+  // ── Cities ──
+  ['4:2',  {t:'C', name:'Ember Court',      cityId:'ember'}],
+  ['14:2', {t:'C', name:'Sable Forge',       cityId:'sable-forge'}],
+  ['1:7',  {t:'C', name:'Char Haven',        cityId:'char-haven'}],
+  ['9:6',  {t:'C', name:'Ashgate Borough',   cityId:'ashgate'}],
+  ['17:6', {t:'C', name:'Grim Terrace',      cityId:'grim-terrace'}],
+  ['11:12',{t:'C', name:'Cinder Bastion',    cityId:'cinder'}],
+  // ── North road: Ember ↔ Ashgate ↔ Sable ──
+  ['5:2',{t:'R'}],['6:2',{t:'R'}],['7:2',{t:'R'}],['8:2',{t:'R'}],
+  ['9:2',{t:'R'}],['9:3',{t:'R'}],['9:4',{t:'R'}],['9:5',{t:'R'}],
+  ['10:2',{t:'R'}],['11:2',{t:'R'}],['12:2',{t:'R'}],['13:2',{t:'R'}],
+  // ── East road: Ashgate → Grim ──
+  ['10:6',{t:'R'}],['11:6',{t:'R'}],['12:6',{t:'R'}],['13:6',{t:'R'}],
+  ['14:6',{t:'R'}],['15:6',{t:'R'}],['16:6',{t:'R'}],
+  // ── West road: Ashgate → Char ──
+  ['8:6',{t:'R'}],['7:6',{t:'R'}],['6:6',{t:'R'}],['5:6',{t:'R'}],
+  ['4:6',{t:'R'}],['3:6',{t:'R'}],['2:6',{t:'R'}],['2:7',{t:'R'}],
+  // ── South road: Ashgate → Cinder ──
+  ['9:7',{t:'R'}],['9:8',{t:'R'}],['9:9',{t:'R'}],['9:10',{t:'R'}],
+  ['9:11',{t:'R'}],['10:11',{t:'R'}],['10:12',{t:'R'}],
+  // ── Exploration: Burnt Shrines (ruin) ──
+  ['2:3',{t:'X',name:'Burnt Shrines',     hazard:2, areaId:'burnt-shrines'}],
+  ['3:3',{t:'X',name:'Burnt Shrines',     hazard:2, areaId:'burnt-shrines'}],
+  ['2:4',{t:'X',name:'Burnt Shrines',     hazard:2, areaId:'burnt-shrines'}],
+  ['3:4',{t:'X',name:'Burnt Shrines',     hazard:2, areaId:'burnt-shrines'}],
+  ['2:5',{t:'X',name:'Burnt Shrines',     hazard:2, areaId:'burnt-shrines'}],
+  // ── Exploration: Cinder Steppe (wilderness) ──
+  ['6:9', {t:'W',name:'Cinder Steppe',    hazard:1, areaId:'cinder-steppe'}],
+  ['7:9', {t:'W',name:'Cinder Steppe',    hazard:1, areaId:'cinder-steppe'}],
+  ['6:10',{t:'W',name:'Cinder Steppe',    hazard:1, areaId:'cinder-steppe'}],
+  ['7:10',{t:'W',name:'Cinder Steppe',    hazard:1, areaId:'cinder-steppe'}],
+  ['6:11',{t:'W',name:'Cinder Steppe',    hazard:1, areaId:'cinder-steppe'}],
+  ['7:11',{t:'W',name:'Cinder Steppe',    hazard:1, areaId:'cinder-steppe'}],
+  ['8:12',{t:'W',name:'Cinder Steppe',    hazard:1, areaId:'cinder-steppe'}],
+  // ── Exploration: Smoke Pits (wilderness) ──
+  ['13:9', {t:'W',name:'Smoke Pits',      hazard:2, areaId:'smoke-pits'}],
+  ['14:9', {t:'W',name:'Smoke Pits',      hazard:2, areaId:'smoke-pits'}],
+  ['13:10',{t:'W',name:'Smoke Pits',      hazard:2, areaId:'smoke-pits'}],
+  ['14:10',{t:'W',name:'Smoke Pits',      hazard:2, areaId:'smoke-pits'}],
+  ['15:10',{t:'W',name:'Smoke Pits',      hazard:2, areaId:'smoke-pits'}],
+  ['13:11',{t:'W',name:'Smoke Pits',      hazard:2, areaId:'smoke-pits'}],
+  // ── Spirit Veins ──
+  ['6:3', {t:'V',name:'Ashen Spirit Vein',spiritDensity:3}],
+  ['14:8',{t:'V',name:'Eastern Vein',      spiritDensity:2}],
+  // ── Forests ──
+  ['3:8',{t:'F'}],['4:8',{t:'F'}],['3:9',{t:'F'}],['4:9',{t:'F'}],
+  ['11:8',{t:'F'}],['12:8',{t:'F'}],['11:9',{t:'F'}],['12:9',{t:'F'}],
+]);
+
+const AF_W = 20, AF_H = 15;
+const TILE_GLYPHS = { M:'▲', R:'·', C:'⌂', W:'≋', F:'♦', X:'✦', V:'◎', '.':'·' };
+const TILE_TERRAIN_NAMES = {
+  M:'Mountain', R:'Road', C:'City', W:'Wilderness Zone',
+  F:'Forest', X:'Ancient Ruin', V:'Spirit Vein', '.':'Open Land'
+};
+const TILE_SIZE = 36;
+
+function getAfTile(x, y) {
+  if (x <= 0 || x >= AF_W - 1 || y <= 0 || y >= AF_H - 1) return { t:'M' };
+  return AF_SPECIAL.get(`${x}:${y}`) ?? { t:'.' };
+}
+
+function getRegionTile(regionId, x, y) {
+  if (regionId === 'ashen-frontier') return getAfTile(x, y);
+  return { t:'M' }; // other regions fully fogged for now
+}
+
+function renderTileMap() {
+  const grid = document.getElementById('tile-grid');
+  const wrap = document.getElementById('tile-map-wrap');
+  if (!grid || !wrap || !_character || !_gameState) return;
+
+  const state = _gameState;
+  const regionId = state.regionId ?? 'ashen-frontier';
+  const px = state.tileX ?? 9;
+  const py = state.tileY ?? 6;
+  const visited = new Set(state.visitedTiles ?? []);
+
+  // If visitedTiles empty (old character), pre-reveal around start
+  if (visited.size === 0) {
+    for (let dy = -2; dy <= 2; dy++)
+      for (let dx = -2; dx <= 2; dx++)
+        visited.add(`${regionId}:${px + dx}:${py + dy}`);
+  }
+
+  const mapW = regionId === 'ashen-frontier' ? AF_W : 10;
+  const mapH = regionId === 'ashen-frontier' ? AF_H : 10;
+
+  grid.innerHTML = '';
+  grid.style.gridTemplateColumns = `repeat(${mapW}, ${TILE_SIZE}px)`;
+  grid.style.gridTemplateRows    = `repeat(${mapH}, ${TILE_SIZE}px)`;
+
+  for (let y = 0; y < mapH; y++) {
+    for (let x = 0; x < mapW; x++) {
+      const tile     = getRegionTile(regionId, x, y);
+      const vKey     = `${regionId}:${x}:${y}`;
+      const isPlayer = (x === px && y === py);
+      const isAdj    = !isPlayer && Math.abs(x - px) <= 1 && Math.abs(y - py) <= 1;
+      const isVis    = visited.has(vKey) || isPlayer;
+      const inFog    = !isVis && !isAdj;
+      const canMove  = isAdj && tile.t !== 'M';
+
+      const div = document.createElement('div');
+      let cls = `tile t-${tile.t === '.' ? 'dot' : tile.t}`;
+      if (inFog)    cls += ' t-fog';
+      if (isPlayer) cls += ' t-player';
+      if (isAdj && !inFog) cls += ' t-adj-vis';
+      if (canMove)  cls += ' t-adj';
+      div.className = cls;
+      div.textContent = isPlayer ? '⊕' : (TILE_GLYPHS[tile.t] ?? '·');
+
+      if (canMove) {
+        div.addEventListener('click', () => moveTile(x, y));
+      } else if (isVis && tile.t !== 'M') {
+        div.addEventListener('click', () => showTileInfo(tile, x, y));
+      }
+
+      grid.appendChild(div);
+    }
+  }
+
+  // Center viewport on player
+  const vpW = wrap.clientWidth  || 600;
+  const vpH = wrap.clientHeight || 440;
+  const offsetX = Math.round(vpW / 2 - (px + 0.5) * TILE_SIZE);
+  const offsetY = Math.round(vpH / 2 - (py + 0.5) * TILE_SIZE);
+  grid.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+
+  // Update realm label
+  const realmLabel = document.getElementById('explore-realm-label');
+  if (realmLabel) {
+    const rName = REALM_NAMES[_character.realm_index] ?? 'Mortal';
+    const regionName = ({ 'ashen-frontier':'Ashen Frontier', 'jade-delta':'Jade Delta', 'iron-wilds':'Iron Wilds', 'void-rift':'Void Rift', 'celestial-plateau':'Celestial Plateau', 'sovereign-wastes':'Sovereign Wastes' })[regionId] ?? regionId;
+    realmLabel.textContent = `${regionName} · ${rName}`;
+  }
+}
+
+async function moveTile(x, y) {
+  if (_guestMode || !_character) return;
+  const regionId = _gameState?.regionId ?? 'ashen-frontier';
+  const r = await API.post('/api/game/action', { action: 'moveToTile', options: { x, y, regionId } });
+  if (!r.ok) {
+    showToast(r.data.error || 'Cannot move there.', 'warn');
+    return;
+  }
+  _gameState = r.data.state ?? _gameState;
+  renderTileMap();
+  // Show tile info for where we moved
+  const tile = getRegionTile(regionId, x, y);
+  showTileInfo(tile, x, y);
+}
+
+function showTileInfo(tile, x, y) {
+  const bar = document.getElementById('tile-info');
+  if (!bar) return;
+
+  const name = tile.name ?? TILE_TERRAIN_NAMES[tile.t] ?? 'Unknown';
+  let html = `<strong>${escHtml(name)}</strong>`;
+  if (tile.hazard) {
+    const dl = tile.hazard >= 7 ? 'Extreme' : tile.hazard >= 5 ? 'High' : tile.hazard >= 3 ? 'Mid' : 'Low';
+    html += ` · <span class="tag-danger">Danger ${tile.hazard} (${dl})</span>`;
+  }
+  if (tile.spiritDensity) html += ` · Spirit Density: ${tile.spiritDensity}`;
+  if (tile.cityId) html += ` · <span class="tag-city">City</span>`;
+  if (tile.areaId) {
+    html += ` &nbsp;<button class="btn-sm btn-primary" style="margin-left:.4rem" onclick="openZoneForArea('${escHtml(tile.areaId)}')">Explore</button>`;
+  }
+  bar.innerHTML = html;
+}
+
+async function openZoneForArea(areaId) {
+  if (_guestMode || !_character) return;
+  const r = await API.get('/api/zones');
+  if (!r.ok) return;
+
+  const zones = (r.data.zones || []).filter(z =>
+    z.name.toLowerCase().replace(/\s+/g,'-').includes(areaId.split('-').slice(0,2).join('-'))
+    || (z.region_id ?? '') === (_gameState?.regionId ?? 'ashen-frontier')
+  );
+
+  const bar = document.getElementById('tile-info');
+  if (!bar) return;
+  if (!zones.length) { showToast('No zones found for this area.', 'warn'); return; }
+
+  // Show first matching zone detail below the tile info
+  const zone = zones[0];
+  const rd = await API.get(`/api/zones/${zone.id}`);
+  if (!rd.ok) return;
+
+  const nodes = rd.data.nodes || [];
+  let html = `<strong>${escHtml(zone.name)}</strong> — ${nodes.length} nodes<br>`;
+  nodes.forEach(node => {
+    const lastLooted = node.last_looted;
+    const respawnMs = (node.respawn_hours || 4) * 3600000;
+    const onCd = lastLooted && (Date.now() - lastLooted < respawnMs);
+    const rem  = onCd ? respawnMs - (Date.now() - lastLooted) : 0;
+    const discovered = node.discovered;
+    html += `<div class="node-card ${onCd ? 'node-cd' : ''}" style="margin:.3rem 0 0">`;
+    html += `<span class="node-name">${discovered ? escHtml(node.name) : '??? Unknown'}</span>`;
+    html += ` <span class="node-meta">${escHtml(node.node_type||'')} · Realm ${node.realm_req}+</span>`;
+    if (onCd) html += ` <span class="node-cd-label">Respawning ${msToMin(rem)}</span>`;
+    else      html += ` <button class="btn-sm btn-primary" onclick="exploreNodeFromTile('${node.id}','${zone.id}')">Explore</button>`;
+    html += `</div>`;
+  });
+  bar.innerHTML = html;
+}
+
+async function exploreNodeFromTile(nodeId, zoneId) {
+  const r = await API.post('/api/game/action', { action: 'exploreNode', options: { nodeId, zoneId } });
+  if (!r.ok) { showToast(r.data.error || 'Exploration failed.', 'error'); return; }
+  _gameState = r.data.state;
+  renderAll();
+  showToast((r.data.result || ['Explored!']).join(' '), 'ok');
+  appendToLog((r.data.result || []).join(' '));
+  // Refresh the area info
+  const tile = getRegionTile(_gameState.regionId ?? 'ashen-frontier', _gameState.tileX ?? 9, _gameState.tileY ?? 6);
+  if (tile.areaId) openZoneForArea(tile.areaId);
+}
+
+function setupExplorePanel() {
+  // No drag setup needed — tile grid is static (centered on player)
+}
+
+
     { id: 'jade-delta',       name: 'Jade Delta',         world: 'Verdant World',  danger: 'Low-Mid',     resources: 'Spirit herbs, alchemy reagents',neighbors: ['ashen-frontier','void-rift'] },
     { id: 'iron-wilds',       name: 'Iron Wilds',         world: 'Ashen World',    danger: 'Mid',         resources: 'Beast cores, blood jade',       neighbors: ['ashen-frontier','void-rift'] },
     { id: 'void-rift',        name: 'Void Rift March',    world: 'Mirror World',   danger: 'High',        resources: 'Array ore, rare relic fragments',neighbors: ['jade-delta','iron-wilds','celestial-plateau'] },

@@ -218,6 +218,7 @@ export async function handleGameAction(request, env, account) {
     case 'trainBody':     result = actionTrainBody(state, character, options);    break;
     case 'trainSoul':     result = actionTrainSoul(state, character, options);    break;
     case 'exploreNode':   result = await actionExploreNode(state, character, options, env); break;
+    case 'moveToTile':    result = actionMoveToTile(state, character, options);    break;
     case 'cityAction':    result = actionCityAction(state, character, options);   break;
     case 'battleAction':  result = actionBattle(state, character, options);       break;
 
@@ -533,6 +534,9 @@ function buildInitialState(name, origin, path) {
     sect: null,
     regionId: getStartingRegion(origin),
     cityId: getStartingCity(origin),
+    tileX: getStartingTileX(origin),
+    tileY: getStartingTileY(origin),
+    visitedTiles: buildStartingVisited(getStartingRegion(origin), getStartingTileX(origin), getStartingTileY(origin)),
     goldenFinger: rollGoldenFinger(),
     goldenFingerRevealed: false,
     rivalNpcs: [],
@@ -562,6 +566,72 @@ function getStartingCity(origin) {
     'outlander': 'ashgate'
   };
   return map[origin] ?? 'ashgate';
+}
+
+function getStartingTileX(origin) {
+  const map = { 'ashen-cultivator': 4, 'verdant-herbalist': 9, 'void-walker': 9, 'heaven-exile': 9, 'ancient-remnant': 9, 'outlander': 9 };
+  return map[origin] ?? 9;
+}
+
+function getStartingTileY(origin) {
+  const map = { 'ashen-cultivator': 2, 'verdant-herbalist': 6, 'void-walker': 6, 'heaven-exile': 6, 'ancient-remnant': 6, 'outlander': 6 };
+  return map[origin] ?? 6;
+}
+
+function buildStartingVisited(regionId, cx, cy) {
+  const tiles = [];
+  for (let dy = -2; dy <= 2; dy++) {
+    for (let dx = -2; dx <= 2; dx++) {
+      tiles.push(`${regionId}:${cx + dx}:${cy + dy}`);
+    }
+  }
+  return tiles;
+}
+
+// Ashen Frontier impassable tiles: border + explicit mountains
+function isTileImpassable(regionId, x, y) {
+  if (regionId === 'ashen-frontier') {
+    if (x <= 0 || x >= 19 || y <= 0 || y >= 14) return true;
+  }
+  return false;
+}
+
+function actionMoveToTile(state, character, options) {
+  const { x, y, regionId } = options ?? {};
+  if (x == null || y == null) return { error: 'Missing tile coordinates', state };
+
+  const targetRegion = regionId ?? state.regionId ?? 'ashen-frontier';
+  const currentX = state.tileX ?? 9;
+  const currentY = state.tileY ?? 6;
+
+  // Only same-region movement for now
+  if (targetRegion !== (state.regionId ?? 'ashen-frontier')) {
+    return { error: 'Cross-region movement not yet implemented', state };
+  }
+
+  // Validate adjacency (8-directional, exactly 1 step)
+  const dx = Math.abs(x - currentX);
+  const dy = Math.abs(y - currentY);
+  if ((dx === 0 && dy === 0) || dx > 1 || dy > 1) {
+    return { error: 'Can only move one tile at a time', state };
+  }
+
+  if (isTileImpassable(targetRegion, x, y)) {
+    return { error: 'Impassable terrain', state };
+  }
+
+  const newState = { ...state, tileX: x, tileY: y };
+
+  // Reveal new tile + its immediate neighbors in fog-of-war
+  const visited = new Set(state.visitedTiles ?? []);
+  for (let ny = y - 1; ny <= y + 1; ny++) {
+    for (let nx = x - 1; nx <= x + 1; nx++) {
+      visited.add(`${targetRegion}:${nx}:${ny}`);
+    }
+  }
+  newState.visitedTiles = [...visited];
+
+  return { state: newState, log: [] };
 }
 
 function rollGoldenFinger() {

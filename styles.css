@@ -1621,6 +1621,67 @@ button.btn-locked {
 .node-meta { display:flex;gap:.5rem;font-size:.75rem;color:var(--ink-2);margin:.1rem 0; }
 .node-cd-label { font-size:.78rem;color:var(--ink-2);font-style:italic; }
 
+/* ── Tile-based World Map ─────────────────────────────────── */
+.tile-map-wrap {
+  position: relative;
+  overflow: hidden;
+  height: min(58vh, 520px);
+  border: 1px solid rgba(201,162,50,.2);
+  border-radius: 8px;
+  background: #06080b;
+  margin-bottom: .6rem;
+}
+.tile-grid {
+  display: grid;
+  position: absolute;
+  top: 0; left: 0;
+  gap: 0;
+  transition: transform .18s cubic-bezier(.25,.1,.25,1);
+  will-change: transform;
+}
+.tile {
+  width: 36px; height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .82rem;
+  cursor: default;
+  border: 1px solid transparent;
+  box-sizing: border-box;
+  user-select: none;
+  position: relative;
+}
+.t-M   { background:#0c0c0c; color:#252525; cursor:not-allowed; border-color:#141414; }
+.t-dot { background:#09090b; color:#1c1b18; border-color:#101010; }
+.t-R   { background:#0f0d08; color:#4a3c12; border-color:#1c1808; }
+.t-C   { background:#14100a; color:#c9a232; border-color:rgba(201,162,50,.28); font-size:.88rem; font-weight:700; }
+.t-W   { background:#080e06; color:#3a5a2a; border-color:#0e160b; }
+.t-F   { background:#060d06; color:#254a22; border-color:#0a130a; }
+.t-X   { background:#0e0a05; color:#7d5a2a; border-color:#1c1208; }
+.t-V   { background:#060d11; color:#3a7d60; border-color:#0a1d22; }
+.t-fog { opacity:.06; pointer-events:none; }
+.t-player { outline:2px solid #c9a232; outline-offset:-2px; z-index:2; font-size:.9rem; }
+.t-player::after { content:''; position:absolute; inset:0; background:rgba(201,162,50,.12); }
+.t-adj { cursor:pointer; border-color:rgba(201,162,50,.35); }
+.t-adj:hover { background-color:rgba(201,162,50,.08); border-color:rgba(201,162,50,.7); }
+.t-adj-vis { border-color:rgba(201,162,50,.15); }
+.tile-map-legend {
+  position:absolute; bottom:6px; right:8px;
+  display:flex; gap:.5rem; flex-wrap:wrap;
+  font-size:.7rem; color:var(--ink-2);
+  background:rgba(6,8,11,.88); padding:3px 7px;
+  border-radius:4px; border:1px solid rgba(255,255,255,.07);
+}
+.tile-info-bar {
+  padding:.5rem .75rem;
+  font-size:.85rem; color:var(--ink-1);
+  border:1px solid rgba(201,162,50,.12);
+  border-radius:6px;
+  background:rgba(255,255,255,.02);
+  min-height:2.4rem;
+  display:flex; align-items:center; flex-wrap:wrap; gap:.4rem;
+}
+.tag-danger { background:rgba(207,74,63,.18); color:#e05050; padding:.1rem .35rem; border-radius:4px; font-size:.78rem; }
+.tag-city   { background:rgba(201,162,50,.18); color:#c9a232; padding:.1rem .35rem; border-radius:4px; font-size:.78rem; }
+
 .inventory-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:.5rem; }
 .inv-item { border:1px solid var(--border);border-radius:8px;padding:.5rem;cursor:pointer;text-align:center;transition:border-color .12s;background:rgba(255,255,255,.03); }
 .inv-item:hover { border-color:var(--bronze-light); }
