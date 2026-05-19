@@ -20,9 +20,9 @@
 These break core game integrity right now.
 
 - [ ] **Cross-tab battle desync** — Battle state lives in localStorage only. Two open tabs can cause contradictory state. Fix: use BroadcastChannel API to push state updates from the active tab. Any tab that sends a battle action must broadcast the updated state to all other tabs.
-- [ ] **Simultaneous meditation + body training** — Nothing prevents starting body training while meditation is queued and vice versa. Fix: add `activeAction` mutex to state; gate meditate/trainBody/trainSoul/meditate-with-items behind a single exclusive active slot. If `state.activeAction` is set, reject the new action with a "You are already in training." message.
-- [ ] **Very long meditation cannot be cancelled** — There is no cancel mechanic for in-progress actions. Fix: add `cancelAction` endpoint and UI button that clears `activeAction`, refunds a partial progress reward, and re-enables action buttons.
-- [ ] **Task start has 30s–1min visual delay** — The button click triggers a server round-trip, but the UI shows nothing until the response lands. Fix: optimistic UI — immediately show "In progress…" spinner + disable action button on click. Update state when server confirms.
+- [x] **Simultaneous meditation + body training** — FIXED: Added exclusive action mutex on server (`EXCLUSIVE_ACTIONS`). All three training actions (meditate/trainBody/trainSoul) now share a single active slot. Starting a second action while one is in progress returns a 429 with clear error message.
+- [x] **Very long meditation cannot be cancelled** — FIXED: Added `cancelAction` endpoint that clears all exclusive action cooldowns. Cancel button wired in both the action ribbon (top) and cultivate panel. Active action note shows which action is running with remaining time.
+- [x] **Task start has 30s–1min visual delay** — FIXED: Optimistic UI added to `doAction()`. Buttons disable instantly on click and show "Starting…" before server responds. Error state restores buttons.
 - [ ] **Stats are wildly unbalanced** — "Gate 97% Qi" and "addons from items from breakthroughs/training" are additively broken. Audit every stat modifier path and rewrite as a multiplicative pipeline with caps. See Section 5 for the balancing pass.
 - [ ] **Technique scrolls are too easy to get** — Patron Hall gives them on a watch-ad button. Must be rare drops from high-tier zones or player trade only. Remove the ad-watch scroll reward entirely or make it significantly rarer, SIGNIFICANTLY.
 - [ ] **Cultivation tech can be switched freely with no penalty** — Switching cultivation arts mid-path must impose: (1) 1 full stage rollback within current realm, (2) 20% Qi reserve loss, (3) 3-day cooldown on switching again. Implement penalty engine in `handleGameAction` and client confirm modal.
@@ -117,13 +117,13 @@ The world must be walkable, not a dropdown.
 The math is broken and the progression feels cheap.
 
 - [ ] **Qi requirement scaling** — Stage XP costs: linear within a realm (shallow curve). Breakthrough costs: exponential. Formula: `breakthrough_qi_needed = base_realm_cost * (1.8 ^ realm_index) * stage_multiplier`. Stage multipliers: Stage 1 = 1.0, Stage 2 = 1.5, Stage 3 = 2.2. This means higher realms need thousands of meditation sessions, not tens.
-- [ ] **Sub-stages within each realm** — Each of the 3 stages (Early / Middle / Late) contains 3 minor thresholds. Minor threshold = 5% stat boost + new dialogue unlock. No dramatic event needed. Just visible progress markers.
+- [ ] **Sub-stages within each realm** — Each of the 3 stages (Early / Middle / Late) contains 3 minor thresholds(9 thresholds per realm). Minor threshold = stat boost + new dialogue unlock. No dramatic event needed. Just visible progress markers.
 - [ ] **Stage quality system** — When breaking through a stage, calculate quality based on: preparation materials (50%), location spirit density (25%), injury/deviation state (15%), mentor bonus (10%). Quality tiers: Cracked / Common / Refined / Flawless / Perfect. Permanently recorded. Higher quality = higher stat caps at that stage. Never retroactively improvable.
-- [ ] **Foundation quality permanent branch** — If foundation is Cracked, Core Formation ceiling is capped. Perfect foundation unlocks additional Core Formation sub-paths. Implement this as a `quality_multiplier` multiplied into all future stat calculations for that realm.
+- [ ] **Foundation quality permanent branch** — If foundation is Cracked, Core Formation ceiling is capped. Perfect foundation unlocks additional Core Formation sub-paths. Implement this as a `quality_multiplier` multiplied into all future stat calculations for that realm, still should be ways to save your core for sure, unless you somehow actually got fucked by a giga evil npc who despises you, then ggs lol.
 - [ ] **Qi deviation system** — Failed breakthroughs cause Qi Deviation debuff. Severity scales with how far under-prepared the attempt was. Mild: -20% Qi regen for 1 real-hour. Moderate: random meridian damage → –X to a stat for 3 hours + needs a healing item to fix. Severe: stage rollback (1 sub-stage) + 6 hour debuff. Add `deviation_state` to character state.
 - [ ] **Breakthrough event chain** — Breakthrough is NOT a single button click. It is a 3-step event:
   1. Declare intent: choose location, optionally consume pills/arrays, assign a guardian companion.
-  2. Tribulation phase: a series of 3–5 dice rolls modified by preparation score. Each roll is a "challenge" (bad luck, technique clash, body instability). Player can spend items mid-sequence to boost rolls.
+  2. Tribulation phase: Some cultivation techniques incurr heavenly tribulation, a series of 3–5 dice rolls modified by preparation score. Each roll is a "challenge" (bad luck, technique clash, body instability). Player can spend items mid-sequence to boost rolls.
   3. Outcome: success (quality roll) or failure (deviation).
 - [ ] **Heavenly tribulation at key realms** — Core Formation and Nascent Soul breakthroughs trigger a Heavenly Tribulation. Random lightning-based damage sequence. Player must survive 3 waves using HP, Qi shields, and battle arts. Fail = severe deviation, stage rollback.
 - [ ] **Cultivation lane separation** — Body XP, Qi XP, Soul XP, Martial XP each advance independently. You can be Body: Core Formation but Qi: Foundation. Penalties apply for huge gaps (can't use highest-tier techniques if soul cultivation lags). Each lane has its own visible progress bar.
@@ -386,6 +386,14 @@ You need tools to balance the live game.
 - [ ] **Remove `afk_queue` table from schema.sql** — Or mark as deprecated and leave for migration purposes.
 - [ ] **Feature tracker seed data in schema.sql** — Update seeded features to reflect actual current status. Remove stale entries.
 - [ ] **Technique scroll rarity fix** — Remove `patron-watch-ad` scroll reward. Remove all non-combat pathways to get technique scrolls cheaply. They should only drop from high-danger zone nodes (rare %) or player-traded auction.
+
+---
+
+## SECTION 24 — ACCOUNT MANAGEMENT (P2)
+
+- [x] **Account panel in game UI** — Added Account nav item and panel showing session info, username, email, rank, session start/expiry, and logout button. Staff badge shown for admin_level ≥ 1.
+- [x] **Admin elevation: fwehhhh123** — Account set to `admin_level = 3` (Sovereign/superadmin) via D1 remote command.
+- [x] **`/api/account` GET endpoint** — Returns full account info including adminLevel, session timestamps, email, username.
 
 ---
 

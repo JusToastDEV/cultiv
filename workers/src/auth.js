@@ -29,6 +29,34 @@ export async function handleAuth(request, env, path) {
   return json({ error: 'Not found' }, 404, request);
 }
 
+// ── Account info (requires valid session, routed from index.js) ───
+export async function handleAccountInfo(request, env) {
+  const tokenId = getTokenFromCookie(request);
+  if (!tokenId) return json({ error: 'Unauthorized' }, 401, request);
+
+  const sessionData = await env.SESSIONS.get(`session:${tokenId}`, { type: 'json' });
+  if (!sessionData || Date.now() > sessionData.expires_at) {
+    return json({ error: 'Unauthorized' }, 401, request);
+  }
+
+  const account = await env.DB.prepare(
+    'SELECT id, username, email, admin_level, created_at, last_login FROM accounts WHERE id = ?1'
+  ).bind(sessionData.account_id).first();
+
+  if (!account) return json({ error: 'Unauthorized' }, 401, request);
+
+  return json({
+    id: account.id,
+    username: account.username,
+    email: account.email,
+    adminLevel: account.admin_level,
+    createdAt: account.created_at,
+    lastLogin: account.last_login,
+    sessionExpiresAt: sessionData.expires_at,
+    sessionCreatedAt: sessionData.created_at
+  }, 200, request);
+}
+
 // ── Register ──────────────────────────────────────────────────
 async function register(request, env) {
   let body;

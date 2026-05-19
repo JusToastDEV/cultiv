@@ -5450,7 +5450,7 @@ function render(state) {
 
   // Profile panel quick stats
   const profileRealm = document.getElementById("profile-realm");
-  if (profileRealm) profileRealm.textContent = getRealm(state)?.label || "—";
+  if (profileRealm) profileRealm.textContent = getRealmStageLabel(state) || "—";
   const profileTurn = document.getElementById("profile-turn");
   if (profileTurn) profileTurn.textContent = state.turn ?? "—";
   const profileLongevity = document.getElementById("profile-longevity");

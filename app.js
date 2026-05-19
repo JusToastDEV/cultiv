@@ -48,6 +48,7 @@ let _account = null;
 let _character = null;
 let _gameState = null;
 let _cooldowns = {};
+let _activeAction = null; // { type, remaining } — current exclusive training action
 let _afkStatus = null;
 let _pollTimer = null;
 let _guestSyncTimer = null;
@@ -139,6 +140,7 @@ function setupAuthUI() {
   // Logout buttons
   document.getElementById('char-select-logout')?.addEventListener('click', signOut);
   document.getElementById('topbar-logout')?.addEventListener('click', signOut);
+  document.getElementById('btn-account-logout')?.addEventListener('click', signOut);
 }
 
 function switchAuthTab(tab) {
@@ -479,6 +481,7 @@ async function selectCharacter(charId) {
   _character = r.data.character;
   _gameState  = r.data.state;
   _cooldowns  = r.data.cooldowns || {};
+  _activeAction = r.data.activeAction ?? null;
 
   if (r.data.craftRewards?.length) showCraftRewards(r.data.craftRewards);
 
@@ -541,6 +544,7 @@ function activatePanel(panelId) {
   if (panelId === 'explore' && _character) loadZones();
   if (panelId === 'inventory') loadInventory();
   if (panelId === 'admin') loadAdminFeatures();
+  if (panelId === 'account') loadAccountInfo();
 }
 
 function setupSidebarToggle() {
@@ -577,9 +581,10 @@ async function pollState() {
   if (!window._activeCharId || _guestMode) return;
   const r = await API.get('/api/game/state');
   if (!r.ok) return;
-  _gameState  = r.data.state;
-  _character  = r.data.character;
-  _cooldowns  = r.data.cooldowns || {};
+  _gameState    = r.data.state;
+  _character    = r.data.character;
+  _cooldowns    = r.data.cooldowns || {};
+  _activeAction = r.data.activeAction ?? null;
   renderAll();
   updateCooldownBars();
 }
@@ -640,22 +645,57 @@ function renderCultivatePanel() {
 }
 
 function updateCooldownBars() {
-  const actionMap = { meditate: 'meditate', trainBody: 'trainBody', trainSoul: 'trainSoul' };
+  const EXCLUSIVE = ['meditate', 'trainBody', 'trainSoul'];
   const maxMs = { meditate: 15 * 60000, trainBody: 20 * 60000, trainSoul: 20 * 60000 };
+  const ACTION_LABELS = { meditate: 'Meditate', trainBody: 'Train Body', trainSoul: 'Train Soul' };
 
-  for (const [action, key] of Object.entries(actionMap)) {
-    const remaining = _cooldowns[key] ?? 0;
+  // Find the active exclusive action (if any)
+  let activeKey = null;
+  let activeRemaining = 0;
+  for (const a of EXCLUSIVE) {
+    const rem = _cooldowns[a] ?? 0;
+    if (rem > 0) { activeKey = a; activeRemaining = rem; break; }
+  }
+
+  for (const action of EXCLUSIVE) {
+    const remaining = _cooldowns[action] ?? 0;
     const max = maxMs[action];
     const pct = remaining > 0 ? Math.min(100, (remaining / max) * 100) : 0;
-    const bar  = document.getElementById(`cd-${action}`);
-    const btn  = document.getElementById(`btn-${action}`);
+    const bar = document.getElementById(`cd-${action}`);
+    const btn = document.getElementById(`btn-${action}`);
     if (bar) bar.style.width = `${100 - pct}%`;
     if (btn) {
-      btn.disabled = remaining > 0;
-      btn.textContent = remaining > 0 ? `${action} (${msToMin(remaining)})` : action.charAt(0).toUpperCase() + action.slice(1);
+      // Disable ALL action buttons if any exclusive is active (mutex)
+      const blocked = activeKey !== null && activeKey !== action;
+      btn.disabled = remaining > 0 || blocked;
+      if (remaining > 0) {
+        btn.textContent = `${ACTION_LABELS[action]} (${msToMin(remaining)})`;
+      } else if (blocked) {
+        btn.textContent = ACTION_LABELS[action];
+      } else {
+        btn.textContent = ACTION_LABELS[action];
+      }
     }
-    // Count-down animation
     if (remaining > 0) startCdCountdown(action, remaining);
+  }
+
+  // Active action note + cancel button
+  const note = document.getElementById('active-action-note');
+  const stopBtn = document.getElementById('btn-stop-action');
+  const ribbon = document.getElementById('action-ribbon');
+  const ribbonText = document.getElementById('action-ribbon-text');
+
+  if (activeKey) {
+    const label = ACTION_LABELS[activeKey] ?? activeKey;
+    const noteText = `${label} in progress — ${msToMin(activeRemaining)} remaining.`;
+    if (note) note.textContent = noteText;
+    if (stopBtn) stopBtn.style.display = '';
+    if (ribbon) ribbon.classList.remove('hidden');
+    if (ribbonText) ribbonText.textContent = noteText;
+  } else {
+    if (note) note.textContent = 'No active action.';
+    if (stopBtn) stopBtn.style.display = 'none';
+    if (ribbon) ribbon.classList.add('hidden');
   }
 }
 
@@ -663,6 +703,8 @@ function startCdCountdown(action, remaining) {
   if (_cdAnimFrames[action]) cancelAnimationFrame(_cdAnimFrames[action]);
   const deadline = Date.now() + remaining;
   const maxMs = { meditate: 15 * 60000, trainBody: 20 * 60000, trainSoul: 20 * 60000 }[action] ?? 60000;
+  const ACTION_LABELS = { meditate: 'Meditate', trainBody: 'Train Body', trainSoul: 'Train Soul' };
+  const EXCLUSIVE = ['meditate', 'trainBody', 'trainSoul'];
 
   function tick() {
     const left = Math.max(0, deadline - Date.now());
@@ -673,11 +715,44 @@ function startCdCountdown(action, remaining) {
     if (btn) {
       btn.disabled = left > 0;
       btn.textContent = left > 0
-        ? `${action.charAt(0).toUpperCase() + action.slice(1)} (${msToMin(left)})`
-        : action.charAt(0).toUpperCase() + action.slice(1);
+        ? `${ACTION_LABELS[action]} (${msToMin(left)})`
+        : ACTION_LABELS[action];
     }
-    if (left > 0) _cdAnimFrames[action] = requestAnimationFrame(tick);
-    else { delete _cdAnimFrames[action]; pollState(); }
+
+    // Keep other exclusive buttons disabled while this action is active
+    if (left > 0) {
+      for (const a of EXCLUSIVE) {
+        if (a === action) continue;
+        const otherBtn = document.getElementById(`btn-${a}`);
+        if (otherBtn && !(_cooldowns[a] > 0)) otherBtn.disabled = true;
+      }
+    }
+
+    // Update active action note
+    const note = document.getElementById('active-action-note');
+    const ribbon = document.getElementById('action-ribbon');
+    const ribbonText = document.getElementById('action-ribbon-text');
+    const stopBtn = document.getElementById('btn-stop-action');
+    if (left > 0) {
+      const noteText = `${ACTION_LABELS[action]} in progress — ${msToMin(left)} remaining.`;
+      if (note) note.textContent = noteText;
+      if (ribbonText) ribbonText.textContent = noteText;
+      if (ribbon) ribbon.classList.remove('hidden');
+      if (stopBtn) stopBtn.style.display = '';
+      _cdAnimFrames[action] = requestAnimationFrame(tick);
+    } else {
+      delete _cdAnimFrames[action];
+      // Re-enable other buttons
+      for (const a of EXCLUSIVE) {
+        if (_cooldowns[a] > 0) continue;
+        const otherBtn = document.getElementById(`btn-${a}`);
+        if (otherBtn) otherBtn.disabled = false;
+      }
+      if (note) note.textContent = 'No active action.';
+      if (ribbon) ribbon.classList.add('hidden');
+      if (stopBtn) stopBtn.style.display = 'none';
+      pollState();
+    }
   }
   _cdAnimFrames[action] = requestAnimationFrame(tick);
 }
@@ -708,6 +783,10 @@ function setupCultivatePanel() {
   });
   document.getElementById('btn-breakthrough')?.addEventListener('click', () => doAction('breakthrough'));
 
+  // Cancel action buttons
+  document.getElementById('btn-stop-action')?.addEventListener('click', () => doAction('cancelAction'));
+  document.getElementById('action-ribbon-cancel')?.addEventListener('click', () => doAction('cancelAction'));
+
   // Legacy buttons in other panels
   document.querySelectorAll('[data-action="meditate"]').forEach(b => b.addEventListener('click', () => doAction('meditate')));
   document.querySelectorAll('[data-action="trainBody"]').forEach(b => b.addEventListener('click', () => doAction('trainBody')));
@@ -717,19 +796,46 @@ function setupCultivatePanel() {
 async function doAction(action, options = {}) {
   if (_guestMode || !window._activeCharId) return;
 
+  const EXCLUSIVE = ['meditate', 'trainBody', 'trainSoul'];
+  const ACTION_LABELS = { meditate: 'Meditate', trainBody: 'Train Body', trainSoul: 'Train Soul' };
+
+  // Optimistic UI — disable action buttons instantly and show "starting" state
+  const clickedBtn = document.getElementById(`btn-${action}`);
+  if (clickedBtn) { clickedBtn.disabled = true; clickedBtn.textContent = 'Starting…'; }
+  if (EXCLUSIVE.includes(action)) {
+    for (const a of EXCLUSIVE) {
+      const b = document.getElementById(`btn-${a}`);
+      if (b) b.disabled = true;
+    }
+  }
+
   const r = await API.post('/api/game/action', { action, options });
+
+  // Revert optimistic disable if something went wrong
   if (!r.ok) {
+    if (clickedBtn) { clickedBtn.disabled = false; clickedBtn.textContent = ACTION_LABELS[action] ?? action; }
+    if (EXCLUSIVE.includes(action)) {
+      for (const a of EXCLUSIVE) {
+        if (!(_cooldowns[a] > 0)) {
+          const b = document.getElementById(`btn-${a}`);
+          if (b) { b.disabled = false; b.textContent = ACTION_LABELS[a] ?? a; }
+        }
+      }
+    }
     if (r.status === 429) {
-      const secs = Math.ceil((r.data.cooldown_ms || 0) / 1000);
-      showToast(`On cooldown — ${msToMin(r.data.cooldown_ms || 0)} remaining.`, 'warn');
+      const msg = r.data.active_action
+        ? `You are already training (${ACTION_LABELS[r.data.active_action] ?? r.data.active_action}).`
+        : `On cooldown — ${msToMin(r.data.cooldown_ms || 0)} remaining.`;
+      showToast(msg, 'warn');
     } else {
       showToast(r.data.error || 'Action failed.', 'error');
     }
     return;
   }
 
-  _gameState  = r.data.state;
-  _cooldowns  = r.data.cooldowns ?? _cooldowns;
+  _gameState    = r.data.state;
+  _cooldowns    = r.data.cooldowns ?? _cooldowns;
+  _activeAction = r.data.activeAction ?? null;
 
   // Update cooldown for this specific action
   if (r.data.cooldown_ms !== undefined) _cooldowns[action] = r.data.cooldown_ms;
@@ -995,9 +1101,57 @@ function showCraftRewards(rewards) {
   rewards.forEach(r => showToast(`Crafting complete: ${r.qty}× ${r.item}`, 'ok'));
 }
 
+// ── Account Panel ──────────────────────────────────────────────
+async function loadAccountInfo() {
+  if (_guestMode) {
+    document.getElementById('acct-loading')?.classList.add('hidden');
+    const err = document.getElementById('acct-error');
+    if (err) { err.textContent = 'Account info is not available in guest mode.'; err.classList.remove('hidden'); }
+    return;
+  }
+
+  const loading = document.getElementById('acct-loading');
+  const errorEl = document.getElementById('acct-error');
+  const content = document.getElementById('acct-content');
+  if (loading) loading.classList.remove('hidden');
+  if (errorEl) errorEl.classList.add('hidden');
+  if (content) content.classList.add('hidden');
+
+  const r = await API.get('/api/account');
+  if (loading) loading.classList.add('hidden');
+
+  if (!r.ok) {
+    if (errorEl) { errorEl.textContent = r.data?.error ?? 'Failed to load account info.'; errorEl.classList.remove('hidden'); }
+    return;
+  }
+
+  const d = r.data;
+  const fmt = ms => ms ? new Date(ms).toLocaleString() : '—';
+  const RANK_LABELS = { 0: 'Cultivator', 1: 'Moderator', 2: 'Administrator', 3: 'Sovereign' };
+
+  setText('acct-username', d.username ?? '—');
+  setText('acct-email', d.email ?? '—');
+  setText('acct-created', fmt(d.createdAt));
+  setText('acct-last-login', fmt(d.lastLogin));
+  setText('acct-rank', RANK_LABELS[d.adminLevel] ?? 'Cultivator');
+  setText('acct-id', d.id ?? '—');
+  setText('acct-session-start', fmt(d.sessionCreatedAt));
+  setText('acct-session-expires', fmt(d.sessionExpiresAt));
+
+  const badge = document.getElementById('acct-admin-badge');
+  if (badge) badge.classList.toggle('hidden', (d.adminLevel ?? 0) < 1);
+
+  if (content) content.classList.remove('hidden');
+}
+
+function setText(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = val;
+}
+
 // ── Admin Panel ────────────────────────────────────────────────
 function checkAdminAccess() {
-  const adminLevel = _account?.admin_level ?? 0;
+  const adminLevel = _account?.adminLevel ?? _account?.admin_level ?? 0;
   document.getElementById('nav-admin-li')?.classList.toggle('hidden', adminLevel < 1);
 }
 

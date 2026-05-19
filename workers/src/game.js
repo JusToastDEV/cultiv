@@ -5,10 +5,11 @@
 import {
   json, generateUUID, auditLog,
   getActiveCharacter, getCharacterState, saveCharacterState,
-  getCooldownRemaining, setCooldown
+  getCooldownRemaining, setCooldown, clearCooldown
 } from './utils.js';
 
 // ── Action cooldowns (milliseconds) ──────────────────────────
+const EXCLUSIVE_ACTIONS = ['meditate', 'trainBody', 'trainSoul'];
 const COOLDOWNS = {
   meditate:      15 * 60 * 1000,  // 15 min
   trainBody:     20 * 60 * 1000,  // 20 min
@@ -130,6 +131,12 @@ export async function handleGameState(request, env, account) {
     cooldowns[k] = await getCooldownRemaining(env, character.id, k);
   }));
 
+  // Derive active exclusive action (first exclusive action with remaining cooldown)
+  let activeAction = null;
+  for (const a of EXCLUSIVE_ACTIONS) {
+    if (cooldowns[a] > 0) { activeAction = { type: a, remaining: cooldowns[a] }; break; }
+  }
+
   // Update last_active
   env.DB.prepare('UPDATE characters SET last_active = ?1 WHERE id = ?2')
     .bind(Date.now(), character.id).run().catch(() => {});
@@ -138,6 +145,7 @@ export async function handleGameState(request, env, account) {
     ok: true,
     state,
     cooldowns,
+    activeAction,
     craftRewards: craftResult?.rewards ?? null,
     character: {
       id: character.id,
@@ -164,7 +172,7 @@ export async function handleGameAction(request, env, account) {
   const { action, options } = body;
   if (!action) return json({ error: 'action is required' }, 400, request);
 
-  // Check cooldown
+  // Check cooldown for this specific action
   if (COOLDOWNS[action] !== undefined) {
     const remaining = await getCooldownRemaining(env, character.id, action);
     if (remaining > 0) {
@@ -172,8 +180,37 @@ export async function handleGameAction(request, env, account) {
     }
   }
 
+  // Exclusive action mutex — prevent simultaneous training actions
+  if (EXCLUSIVE_ACTIONS.includes(action)) {
+    for (const a of EXCLUSIVE_ACTIONS) {
+      if (a === action) continue;
+      const rem = await getCooldownRemaining(env, character.id, a);
+      if (rem > 0) {
+        return json({
+          error: 'You are already in training. Complete or cancel your current session first.',
+          active_action: a,
+          cooldown_ms: rem
+        }, 429, request);
+      }
+    }
+  }
+
   let state = await getCharacterState(env, character.id);
   if (!state) return json({ error: 'Character state not found' }, 404, request);
+
+  // Cancel active training action
+  if (action === 'cancelAction') {
+    const cancelled = [];
+    for (const a of EXCLUSIVE_ACTIONS) {
+      const rem = await getCooldownRemaining(env, character.id, a);
+      if (rem > 0) {
+        await clearCooldown(env, character.id, a);
+        cancelled.push(a);
+      }
+    }
+    const name = { meditate: 'Meditation', trainBody: 'Body training', trainSoul: 'Soul training' }[cancelled[0]] ?? 'Training';
+    return json({ ok: true, result: [`${name} cancelled. Training was interrupted.`], state }, 200, request);
+  }
 
   let result;
   switch (action) {
@@ -203,7 +240,17 @@ export async function handleGameAction(request, env, account) {
     await setCooldown(env, character.id, action, COOLDOWNS[action]);
   }
 
-  return json({ ok: true, result: result.log, state: result.state }, 200, request);
+  // Return updated cooldowns so client can update immediately
+  const cooldowns = {};
+  await Promise.all(Object.keys(COOLDOWNS).map(async k => {
+    cooldowns[k] = await getCooldownRemaining(env, character.id, k);
+  }));
+  let activeAction = null;
+  for (const a of EXCLUSIVE_ACTIONS) {
+    if (cooldowns[a] > 0) { activeAction = { type: a, remaining: cooldowns[a] }; break; }
+  }
+
+  return json({ ok: true, result: result.log, state: result.state, cooldowns, activeAction }, 200, request);
 }
 
 // ── Zone routes ───────────────────────────────────────────────

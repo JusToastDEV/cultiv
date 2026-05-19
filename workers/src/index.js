@@ -6,6 +6,7 @@
  *   POST /api/auth/login
  *   POST /api/auth/logout
  *   GET  /api/auth/session
+ *   GET  /api/account
  *   GET  /api/characters
  *   POST /api/characters
  *   DELETE /api/characters/:slot
@@ -20,7 +21,7 @@
  *   GET  /api/admin/*  (admin_level >= 1 required)
  */
 
-import { handleAuth } from './auth.js';
+import { handleAuth, handleAccountInfo } from './auth.js';
 import { handleCharacters, handleGameState, handleGameAction, handleZones, handleInventory } from './game.js';
 import { handleWorldEvents } from './world.js';
 import { handleAdmin } from './admin.js';
@@ -41,6 +42,11 @@ export default {
       // ── Auth routes (no session required) ──────────────────
       if (path.startsWith('/api/auth/')) {
         return await handleAuth(request, env, path);
+      }
+
+      // ── Account info (session required, handled separately) ─
+      if (path === '/api/account' && request.method === 'GET') {
+        return await handleAccountInfo(request, env);
       }
 
       // ── Static assets — serve directly, no auth required ───

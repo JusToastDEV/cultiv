@@ -139,6 +139,14 @@ export async function setCooldown(env, characterId, actionKey, durationMs) {
 }
 
 /**
+ * Clears an action cooldown in KV.
+ */
+export async function clearCooldown(env, characterId, actionKey) {
+  const key = `cd:${characterId}:${actionKey}`;
+  await env.COOLDOWNS.delete(key);
+}
+
+/**
  * Non-blocking audit log insert.
  */
 export async function auditLog(env, { accountId, characterId, adminId, action, data, ip }) {

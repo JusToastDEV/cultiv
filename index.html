@@ -102,6 +102,7 @@
          <li><a href="#" class="nav-item" data-panel="guild"><span class="nav-icon">⚔</span><span class="nav-label">Faction</span></a></li>
          <li><a href="#" class="nav-item" data-panel="city"><span class="nav-icon">⛩</span><span class="nav-label">City</span></a></li>
          <li><a href="#" class="nav-item" data-panel="profile"><span class="nav-icon">◎</span><span class="nav-label">Me</span></a></li>
+         <li><a href="#" class="nav-item" data-panel="account"><span class="nav-icon">◈</span><span class="nav-label">Account</span></a></li>
          <li class="nav-admin hidden" id="nav-admin-li"><a href="#" class="nav-item nav-admin-link" data-panel="admin"><span class="nav-icon">☰</span><span class="nav-label">Admin</span></a></li>
        </ul>
      </nav>
@@ -278,6 +279,45 @@
              <h3>Silver Vault</h3>
              <p class="card-desc">Deposit or withdraw silver from the city bank.</p>
              <button class="btn-sm btn-primary" type="button" onclick="document.getElementById('open-bank').click()">Open Vault</button>
+           </div>
+         </div>
+       </section>
+
+       <section id="panel-account" class="panel hidden">
+         <div class="panel-header">
+           <h2>Account</h2>
+           <span class="panel-meta acct-admin-badge hidden" id="acct-admin-badge">⚑ Staff</span>
+         </div>
+
+         <div id="acct-loading" class="card text-muted">Loading account info…</div>
+         <div id="acct-error" class="card text-bad hidden"></div>
+
+         <div id="acct-content" class="hidden">
+           <div class="panel-grid-2">
+             <div class="card">
+               <h3>Account Info</h3>
+               <dl class="profile-stat-list">
+                 <dt>Username</dt><dd id="acct-username">—</dd>
+                 <dt>Email</dt><dd id="acct-email">—</dd>
+                 <dt>Registered</dt><dd id="acct-created">—</dd>
+                 <dt>Last Login</dt><dd id="acct-last-login">—</dd>
+                 <dt>Rank</dt><dd id="acct-rank">Cultivator</dd>
+               </dl>
+             </div>
+             <div class="card">
+               <h3>Session</h3>
+               <dl class="profile-stat-list">
+                 <dt>Started</dt><dd id="acct-session-start">—</dd>
+                 <dt>Expires</dt><dd id="acct-session-expires">—</dd>
+               </dl>
+               <div class="btn-row mt-md">
+                 <button class="btn-sm" id="btn-account-logout" type="button">End Session</button>
+               </div>
+             </div>
+           </div>
+           <div class="card mt-md acct-id-card">
+             <span class="text-muted" style="font-size:.72rem">Account ID: </span>
+             <span id="acct-id" class="acct-id-value">—</span>
            </div>
          </div>
        </section>
