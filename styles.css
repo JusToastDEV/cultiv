@@ -1458,10 +1458,17 @@ button:disabled {
 .char-select-title { font-family:Cinzel,serif;font-size:1.6rem;margin:0 0 1.2rem;color:var(--ink-0); }
 .char-slots { display:flex;flex-direction:column;gap:.8rem; }
 .char-slot-card { background:var(--bg-1);border:1px solid var(--border);border-radius:12px;padding:1rem 1.2rem;display:flex;align-items:center;gap:1rem; }
+.char-slot-empty-card { align-items:flex-start; }
 .char-slot-info { flex:1; }
 .char-slot-info strong { display:block;font-size:1.05rem; }
 .char-slot-realm,.char-slot-origin { font-size:.82rem;color:var(--ink-2); }
 .char-slot-empty { color:var(--ink-2);font-style:italic; }
+.char-slot-help { margin:.45rem 0 0;color:var(--ink-2);font-size:.84rem; }
+.char-create-form { margin-top:.85rem;display:grid;gap:.7rem;max-width:320px; }
+.char-create-field { display:grid;gap:.35rem;color:var(--ink-1);font-size:.84rem; }
+.char-create-field input,.char-create-field select { border-radius:8px;border:1px solid var(--border);background:rgba(12,18,28,.9);color:var(--ink-0);padding:.55rem .7rem; }
+.char-create-error { min-height:1.1rem;margin:0;color:#cf5b5b;font-size:.82rem; }
+.char-create-actions { display:flex;gap:.6rem;flex-wrap:wrap; }
 .char-logout { margin-top:1.2rem; }
 
 .game-shell { display:flex;flex-direction:column;height:100dvh;overflow:hidden;background:var(--bg-0); }

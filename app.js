@@ -64,6 +64,21 @@ const STAGE_NAMES = [
   'Early Stage', 'Mid Stage', 'Late Stage', 'Peak Stage'
 ];
 
+const LIVE_CHARACTER_ORIGINS = [
+  { value: 'outlander', label: 'Wandering Outlander' },
+  { value: 'ashen-cultivator', label: 'Ashen Cultivator' },
+  { value: 'verdant-herbalist', label: 'Verdant Herbalist' },
+  { value: 'void-walker', label: 'Void Walker' },
+  { value: 'heaven-exile', label: 'Heaven Exile' },
+  { value: 'ancient-remnant', label: 'Ancient Remnant' }
+];
+
+const LIVE_CHARACTER_PATHS = [
+  { value: 'balanced', label: 'Balanced Path' },
+  { value: 'body-tempering', label: 'Body Tempering' },
+  { value: 'soul-attunement', label: 'Soul Attunement' }
+];
+
 // ── Bootstrap ──────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
   setupAuthUI();
@@ -285,6 +300,7 @@ async function enterGame() {
   const r = await API.get('/api/characters');
   if (!r.ok) {
     showScreen('auth');
+    setAuthError('login', getAuthFailureMessage(r, 'Could not load your character list.'));
     return;
   }
   const chars = r.data.characters || [];
@@ -300,9 +316,9 @@ function showCharacterSelect(chars) {
   slots.forEach(slot => {
     const existing = chars.find(c => c.slot === slot);
     const card = document.createElement('div');
-    card.className = 'char-slot-card';
 
     if (existing) {
+      card.className = 'char-slot-card';
       const realm = REALM_NAMES[existing.realm_index] ?? 'Unknown Realm';
       card.innerHTML = `
         <div class="char-slot-info">
@@ -314,11 +330,42 @@ function showCharacterSelect(chars) {
         <button class="btn-ghost btn-sm char-delete-btn" data-char-id="${existing.id}" data-slot="${slot}">Delete</button>
       `;
     } else {
+      card.className = 'char-slot-card char-slot-empty-card';
+      const originOptions = LIVE_CHARACTER_ORIGINS.map(origin => `
+        <option value="${origin.value}">${origin.label}</option>
+      `).join('');
+      const pathOptions = LIVE_CHARACTER_PATHS.map(path => `
+        <option value="${path.value}">${path.label}</option>
+      `).join('');
       card.innerHTML = `
         <div class="char-slot-info">
           <span class="char-slot-empty">— Empty Slot ${slot} —</span>
+          <p class="char-slot-help">Create a live character here, then enter the game immediately.</p>
+          <div class="char-create-form hidden" data-create-form="${slot}">
+            <label class="char-create-field">
+              <span>Name</span>
+              <input type="text" data-create-name="${slot}" maxlength="24" autocomplete="off" placeholder="Cultivator name" />
+            </label>
+            <label class="char-create-field">
+              <span>Origin</span>
+              <select data-create-origin="${slot}">
+                ${originOptions}
+              </select>
+            </label>
+            <label class="char-create-field">
+              <span>Path</span>
+              <select data-create-path="${slot}">
+                ${pathOptions}
+              </select>
+            </label>
+            <p class="char-create-error" data-create-error="${slot}"></p>
+            <div class="char-create-actions">
+              <button class="btn-primary btn-create-submit" type="button" data-slot="${slot}">Begin Cultivation</button>
+              <button class="btn-ghost btn-create-cancel" type="button" data-slot="${slot}">Cancel</button>
+            </div>
+          </div>
         </div>
-        <button class="btn-ghost btn-create" data-slot="${slot}">Create Character</button>
+        <button class="btn-ghost btn-create-toggle" type="button" data-slot="${slot}">Create Character</button>
       `;
     }
 
@@ -341,20 +388,69 @@ function showCharacterSelect(chars) {
     });
   });
 
-  // Create new character — delegates to main.js character creation overlay
-  container.querySelectorAll('.btn-create').forEach(btn => {
+  // Create new character directly against the live API
+  container.querySelectorAll('.btn-create-toggle').forEach(btn => {
     btn.addEventListener('click', () => {
-      window._pendingCharSlot = btn.dataset.slot;
-      // main.js handles the creation overlay; after creation, we refresh
-      const overlay = document.getElementById('character-creation-overlay');
-      if (overlay) {
-        overlay.classList.remove('hidden');
-        if (typeof initCreationFlow === 'function') initCreationFlow();
-      } else {
-        alert('Character creation UI not loaded yet.');
-      }
+      const slot = btn.dataset.slot;
+      const form = container.querySelector(`[data-create-form="${slot}"]`);
+      form?.classList.remove('hidden');
+      btn.classList.add('hidden');
+      container.querySelector(`[data-create-name="${slot}"]`)?.focus();
     });
   });
+
+  container.querySelectorAll('.btn-create-cancel').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const slot = btn.dataset.slot;
+      const form = container.querySelector(`[data-create-form="${slot}"]`);
+      const toggle = container.querySelector(`.btn-create-toggle[data-slot="${slot}"]`);
+      const error = container.querySelector(`[data-create-error="${slot}"]`);
+      if (error) error.textContent = '';
+      form?.classList.add('hidden');
+      toggle?.classList.remove('hidden');
+    });
+  });
+
+  container.querySelectorAll('.btn-create-submit').forEach(btn => {
+    btn.addEventListener('click', () => createLiveCharacter(btn.dataset.slot, container));
+  });
+}
+
+async function createLiveCharacter(slot, container) {
+  const nameInput = container.querySelector(`[data-create-name="${slot}"]`);
+  const originInput = container.querySelector(`[data-create-origin="${slot}"]`);
+  const pathInput = container.querySelector(`[data-create-path="${slot}"]`);
+  const error = container.querySelector(`[data-create-error="${slot}"]`);
+  const submit = container.querySelector(`.btn-create-submit[data-slot="${slot}"]`);
+
+  const name = nameInput?.value.trim() || '';
+  const origin = originInput?.value || 'outlander';
+  const charPath = pathInput?.value || 'balanced';
+
+  if (error) error.textContent = '';
+
+  if (!/^[a-zA-Z\s'-]{2,24}$/.test(name)) {
+    if (error) error.textContent = 'Name must be 2-24 letters, spaces, apostrophes, or hyphens.';
+    nameInput?.focus();
+    return;
+  }
+
+  if (submit) submit.disabled = true;
+  const r = await API.post('/api/characters', {
+    name,
+    origin,
+    path: charPath,
+    slot: Number(slot)
+  });
+  if (submit) submit.disabled = false;
+
+  if (!r.ok) {
+    if (error) error.textContent = r.data.error || 'Could not create character.';
+    return;
+  }
+
+  showToast('Character created.', 'ok');
+  await selectCharacter(r.data.characterId);
 }
 
 async function selectCharacter(charId) {
