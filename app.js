@@ -54,6 +54,8 @@ let _pollTimer = null;
 let _guestSyncTimer = null;
 let _cdAnimFrames = {};
 let _guestMode = false;
+let _travelReadyAt = 0;      // epoch ms when next tile move is allowed
+let _travelTimerInterval = null; // setInterval handle for travel countdown
 
 // Realm names for display
 const REALM_NAMES = [
@@ -482,8 +484,10 @@ async function selectCharacter(charId) {
   _gameState  = r.data.state;
   _cooldowns  = r.data.cooldowns || {};
   _activeAction = r.data.activeAction ?? null;
-
-  if (r.data.craftRewards?.length) showCraftRewards(r.data.craftRewards);
+  if (r.data.travelCooldown > 0 && _travelReadyAt < Date.now() + r.data.travelCooldown) {
+    _travelReadyAt = Date.now() + r.data.travelCooldown;
+    startTravelTimer();
+  }
 
   showScreen('game');
   activatePanel('cultivate');
@@ -585,6 +589,10 @@ async function pollState() {
   _character    = r.data.character;
   _cooldowns    = r.data.cooldowns || {};
   _activeAction = r.data.activeAction ?? null;
+  if (r.data.travelCooldown > 0 && _travelReadyAt < Date.now() + r.data.travelCooldown) {
+    _travelReadyAt = Date.now() + r.data.travelCooldown;
+    startTravelTimer();
+  }
   renderAll();
   updateCooldownBars();
 }
@@ -1169,6 +1177,7 @@ function renderTileMap() {
 
   const mapW = regionId === 'ashen-frontier' ? AF_W : 10;
   const mapH = regionId === 'ashen-frontier' ? AF_H : 10;
+  const isTraveling = _travelReadyAt > Date.now();
 
   grid.innerHTML = '';
   grid.style.gridTemplateColumns = `repeat(${mapW}, ${TILE_SIZE}px)`;
@@ -1182,7 +1191,7 @@ function renderTileMap() {
       const isAdj    = !isPlayer && Math.abs(x - px) <= 1 && Math.abs(y - py) <= 1;
       const isVis    = visited.has(vKey) || isPlayer;
       const inFog    = !isVis && !isAdj;
-      const canMove  = isAdj && tile.t !== 'M';
+      const canMove  = isAdj && tile.t !== 'M' && !isTraveling;
 
       const div = document.createElement('div');
       let cls = `tile t-${tile.t === '.' ? 'dot' : tile.t}`;
@@ -1190,6 +1199,11 @@ function renderTileMap() {
       if (isPlayer) cls += ' t-player';
       if (isAdj && !inFog) cls += ' t-adj-vis';
       if (canMove)  cls += ' t-adj';
+      if (isVis && !isPlayer) cls += ' t-visited';
+      // City-specific color class
+      if (tile.t === 'C' && tile.cityId) cls += ` city-${tile.cityId}`;
+      // Area biome class for color variety
+      if (tile.areaId) cls += ` area-${tile.areaId.split('-').slice(0,2).join('-')}`;
       div.className = cls;
       div.textContent = isPlayer ? '⊕' : (TILE_GLYPHS[tile.t] ?? '·');
 
@@ -1221,17 +1235,52 @@ function renderTileMap() {
 
 async function moveTile(x, y) {
   if (_guestMode || !_character) return;
+  // Client-side travel gate
+  const now = Date.now();
+  if (_travelReadyAt > now) {
+    const secs = Math.ceil((_travelReadyAt - now) / 1000);
+    showTileInfo({ t: '.' }, x, y, `⏳ Still traveling… ${secs}s`);
+    return;
+  }
   const regionId = _gameState?.regionId ?? 'ashen-frontier';
-  const r = await API.post('/api/game/action', { action: 'moveToTile', options: { x, y, regionId } });
+  const tile = getRegionTile(regionId, x, y);
+  const r = await API.post('/api/game/action', { action: 'moveToTile', options: { x, y, regionId, terrainType: tile.t } });
   if (!r.ok) {
+    if (r.data.cooldown_ms) {
+      _travelReadyAt = Date.now() + r.data.cooldown_ms;
+      startTravelTimer();
+    }
     showToast(r.data.error || 'Cannot move there.', 'warn');
     return;
   }
   _gameState = r.data.state ?? _gameState;
+  if (r.data.travelCooldown > 0) {
+    _travelReadyAt = Date.now() + r.data.travelCooldown;
+    startTravelTimer();
+  }
   renderTileMap();
-  // Show tile info for where we moved
-  const tile = getRegionTile(regionId, x, y);
   showTileInfo(tile, x, y);
+}
+
+function startTravelTimer() {
+  clearInterval(_travelTimerInterval);
+  _travelTimerInterval = setInterval(() => {
+    const rem = _travelReadyAt - Date.now();
+    if (rem <= 0) {
+      clearInterval(_travelTimerInterval);
+      _travelTimerInterval = null;
+      renderTileMap(); // re-enable movement
+      const bar = document.getElementById('tile-info');
+      if (bar && bar.dataset.traveling === '1') bar.textContent = 'You have arrived. Click adjacent tiles to continue.';
+      return;
+    }
+    const bar = document.getElementById('tile-info');
+    if (bar) {
+      bar.dataset.traveling = '1';
+      bar.innerHTML = `⏳ Traveling… <strong>${Math.ceil(rem / 1000)}s</strong> until you can move again.`;
+    }
+    renderTileMap(); // keep adj tiles non-clickable
+  }, 1000);
 }
 
 function showTileInfo(tile, x, y) {

@@ -1936,11 +1936,37 @@ button.btn-locked {
 .t-H   { background:#060d08; color:#3a7455; border-color:#0a1a0e; } /* herb — jade-green */
 .t-B   { background:#0f0606; color:#7d2a2a; border-color:#1c0a0a; } /* beast lair — blood red */
 .t-fog { opacity:.06; pointer-events:none; }
+/* Visited tiles: appreciably brighter than fog but still atmospheric */
+.t-visited { filter: brightness(1.55) saturate(1.2); }
 .t-player { outline:2px solid #c9a232; outline-offset:-2px; z-index:2; font-size:.9rem; }
 .t-player::after { content:''; position:absolute; inset:0; background:rgba(201,162,50,.12); }
 .t-adj { cursor:pointer; border-color:rgba(201,162,50,.35); }
 .t-adj:hover { background-color:rgba(201,162,50,.08); border-color:rgba(201,162,50,.7); }
 .t-adj-vis { border-color:rgba(201,162,50,.15); }
+
+/* ── City-specific tile colors ── */
+.city-ember        { background:#1a0a02; color:#e07530; border-color:rgba(224,117,48,.4); }
+.city-sable-forge  { background:#0b0d18; color:#8090c8; border-color:rgba(128,144,200,.4); }
+.city-char-haven   { background:#120e06; color:#c09040; border-color:rgba(192,144,64,.4); }
+.city-ashgate      { background:#0e0f0f; color:#a0b0a8; border-color:rgba(160,176,168,.4); }
+.city-grim-terrace { background:#110808; color:#c04848; border-color:rgba(192,72,72,.4); }
+.city-cinder       { background:#110c06; color:#d08028; border-color:rgba(208,128,40,.4); }
+.city-irongate     { background:#07100e; color:#60b0a0; border-color:rgba(96,176,160,.4); }
+.city-dusk-haven   { background:#09061a; color:#9060d0; border-color:rgba(144,96,208,.4); }
+.city-voidmarch    { background:#04040e; color:#6845b0; border-color:rgba(104,69,176,.4); }
+
+/* ── Area biome color tints (first two slug segments) ── */
+.area-burnt,    .area-hollow,   .area-shattered,
+.area-ashen,    .area-sunken    { filter:sepia(.15) hue-rotate(20deg); }   /* ruin warm */
+.area-cinder,   .area-smoke,    .area-ember,
+.area-ashfen                    { filter:sepia(.2) hue-rotate(-10deg); }   /* ash/fire */
+.area-wolfpack, .area-emberclaw,
+.area-thundermaw                { filter:sepia(.1) hue-rotate(5deg) brightness(1.1); }  /* lair */
+.area-iron,     .area-obsidian,
+.area-deep,     .area-hollow,   .area-void     { filter:brightness(.9) saturate(.9); }  /* mines — dark */
+.area-mistwing, .area-jade,     .area-ember-r,
+.area-windbloom, .area-moonshade { filter:hue-rotate(40deg) saturate(1.1); }  /* herb — green */
+.area-serpent,  .area-bone,     .area-dusk     { filter:hue-rotate(-15deg) saturate(1.2); } /* swamp/dark wild */
 .tile-map-legend {
   position:absolute; bottom:6px; right:8px;
   display:flex; gap:.5rem; flex-wrap:wrap;

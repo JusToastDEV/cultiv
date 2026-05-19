@@ -8,6 +8,20 @@ import {
   getCooldownRemaining, setCooldown, clearCooldown
 } from './utils.js';
 
+// ── Travel times per terrain type (ms) ──────────────────────
+const TRAVEL_TIMES = {
+  'C': 20 * 1000,  // City  — 20s
+  'R': 25 * 1000,  // Road  — 25s
+  '.': 40 * 1000,  // Open  — 40s
+  'V': 40 * 1000,  // Vein  — 40s
+  'H': 50 * 1000,  // Herb  — 50s
+  'F': 55 * 1000,  // Forest — 55s
+  'W': 60 * 1000,  // Wild  — 60s
+  'B': 65 * 1000,  // Lair  — 65s
+  'K': 70 * 1000,  // Cave  — 70s
+  'X': 75 * 1000,  // Ruin  — 75s
+};
+
 // ── Action cooldowns (milliseconds) ──────────────────────────
 const EXCLUSIVE_ACTIONS = ['meditate', 'trainBody', 'trainSoul'];
 const COOLDOWNS = {
@@ -131,6 +145,9 @@ export async function handleGameState(request, env, account) {
     cooldowns[k] = await getCooldownRemaining(env, character.id, k);
   }));
 
+  // Travel cooldown
+  const travelCooldown = await getCooldownRemaining(env, character.id, 'travel');
+
   // Derive active exclusive action (first exclusive action with remaining cooldown)
   let activeAction = null;
   for (const a of EXCLUSIVE_ACTIONS) {
@@ -145,6 +162,7 @@ export async function handleGameState(request, env, account) {
     ok: true,
     state,
     cooldowns,
+    travelCooldown,
     activeAction,
     craftRewards: craftResult?.rewards ?? null,
     character: {
@@ -212,6 +230,14 @@ export async function handleGameAction(request, env, account) {
     return json({ ok: true, result: [`${name} cancelled. Training was interrupted.`], state }, 200, request);
   }
 
+  // Travel cooldown gate for moveToTile
+  if (action === 'moveToTile') {
+    const travelRem = await getCooldownRemaining(env, character.id, 'travel');
+    if (travelRem > 0) {
+      return json({ error: 'Still traveling...', cooldown_ms: travelRem }, 429, request);
+    }
+  }
+
   let result;
   switch (action) {
     case 'meditate':      result = actionMeditate(state, character, options);     break;
@@ -241,6 +267,15 @@ export async function handleGameAction(request, env, account) {
     await setCooldown(env, character.id, action, COOLDOWNS[action]);
   }
 
+  // Set travel cooldown on successful tile move
+  let travelCooldown = 0;
+  if (action === 'moveToTile') {
+    const tType = options?.terrainType ?? '.';
+    const travelMs = TRAVEL_TIMES[tType] ?? 45000;
+    await setCooldown(env, character.id, 'travel', travelMs);
+    travelCooldown = travelMs;
+  }
+
   // Return updated cooldowns so client can update immediately
   const cooldowns = {};
   await Promise.all(Object.keys(COOLDOWNS).map(async k => {
@@ -251,7 +286,7 @@ export async function handleGameAction(request, env, account) {
     if (cooldowns[a] > 0) { activeAction = { type: a, remaining: cooldowns[a] }; break; }
   }
 
-  return json({ ok: true, result: result.log, state: result.state, cooldowns, activeAction }, 200, request);
+  return json({ ok: true, result: result.log, state: result.state, cooldowns, travelCooldown, activeAction }, 200, request);
 }
 
 // ── Zone routes ───────────────────────────────────────────────
