@@ -86,7 +86,6 @@ window.addEventListener('DOMContentLoaded', () => {
   setupSidebarToggle();
   setupTopbarActions();
   setupCultivatePanel();
-  setupAFKPanel();
   setupAdminPanel();
   setupExplorePanel();
 
@@ -481,11 +480,10 @@ async function selectCharacter(charId) {
   _gameState  = r.data.state;
   _cooldowns  = r.data.cooldowns || {};
 
-  // Show AFK rewards if any came back on login
-  if (r.data.afkRewards) showAfkRewards(r.data.afkRewards);
   if (r.data.craftRewards?.length) showCraftRewards(r.data.craftRewards);
 
   showScreen('game');
+  activatePanel('cultivate');
   updateTopbarLogoutLabel();
   renderAll();
   startPolling();
@@ -542,7 +540,6 @@ function activatePanel(panelId) {
   // Lazy-load panel data
   if (panelId === 'explore' && _character) loadZones();
   if (panelId === 'inventory') loadInventory();
-  if (panelId === 'afk') loadAfkStatus();
   if (panelId === 'admin') loadAdminFeatures();
 }
 
@@ -583,7 +580,6 @@ async function pollState() {
   _gameState  = r.data.state;
   _character  = r.data.character;
   _cooldowns  = r.data.cooldowns || {};
-  if (r.data.afkRewards) showAfkRewards(r.data.afkRewards);
   renderAll();
   updateCooldownBars();
 }
@@ -593,7 +589,6 @@ function renderAll() {
   if (!_gameState || !_character) return;
   renderTopBar();
   renderCultivatePanel();
-  renderAfkBadge();
 }
 
 function renderTopBar() {

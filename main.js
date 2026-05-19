@@ -5364,6 +5364,16 @@ function render(state) {
     btnStop.style.display = state.activeAction ? "" : "none";
   }
 
+  // Disable action buttons while an action or battle is in progress
+  const actionLocked = !!(state.activeAction || state.battle);
+  ["btn-meditate", "btn-trainBody", "btn-trainSoul", "btn-breakthrough"].forEach((id) => {
+    const btn = document.getElementById(id);
+    if (btn) {
+      btn.disabled = actionLocked;
+      btn.classList.toggle("btn-locked", actionLocked);
+    }
+  });
+
   if (!state.activeAction) {
     document.getElementById("active-action-note").textContent = "No active action.";
   } else {
@@ -5648,11 +5658,39 @@ function bootstrap() {
     interaction: null
   };
 
+  // BroadcastChannel: sync game state across multiple open tabs
+  let _bcIgnoreNext = false;
+  const _bc = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel("sealed_heavens_state") : null;
+  if (_bc) {
+    _bc.onmessage = (event) => {
+      if (event.data && event.data.type === "state_update") {
+        // Apply the incoming state from another tab (preserve our UI object)
+        const incoming = event.data.state;
+        const ui = state.ui;
+        Object.keys(state).forEach((k) => delete state[k]);
+        Object.assign(state, incoming);
+        state.ui = ui;
+        _bcIgnoreNext = true;
+        render(state);
+      }
+    };
+  }
+
+  function broadcastState() {
+    if (_bc && !_bcIgnoreNext) {
+      const exportable = deepClone(state);
+      delete exportable.ui;
+      _bc.postMessage({ type: "state_update", state: exportable });
+    }
+    _bcIgnoreNext = false;
+  }
+
   document.querySelectorAll("button[data-action]").forEach((button) => {
     button.addEventListener("click", () => {
       const action = button.getAttribute("data-action");
       applyAction(state, action);
       render(state);
+      broadcastState();
     });
   });
 
@@ -5678,28 +5716,6 @@ function bootstrap() {
   });
   document.getElementById("close-patron-hall").addEventListener("click", () => {
     closePanel(document.getElementById("patron-modal"));
-  });
-
-  // Watch-ad stub: simulates a short delay then awards 1 scroll
-  let adCooldown = false;
-  document.getElementById("patron-watch-ad").addEventListener("click", () => {
-    if (adCooldown) {
-      document.getElementById("patron-ad-note").textContent = "Ad already watched recently. Come back in a bit.";
-      return;
-    }
-    const note = document.getElementById("patron-ad-note");
-    note.textContent = "Loading ad\u2026";
-    adCooldown = true;
-    setTimeout(() => {
-      const scrollId = getRandomTechniqueScrollId(state);
-      const scrollTpl = getItemTemplate(scrollId);
-      addItemToInventory(state, scrollId, 1);
-      pushLog(state, `Watched an ad — found a ${scrollTpl ? scrollTpl.label : "Technique Scroll"}. Check your inventory.`, "good");
-      note.textContent = `Thanks for supporting! Scroll added to inventory.`;
-      render(state);
-      // 5-minute cooldown
-      setTimeout(() => { adCooldown = false; note.textContent = ""; }, 300000);
-    }, 3000);
   });
 
   document.getElementById("open-bank").addEventListener("click", () => {
