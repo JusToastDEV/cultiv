@@ -4,7 +4,7 @@
  * Session tokens stored in KV with 30-day TTL
  */
 
-import { corsHeaders, generateUUID, auditLog } from './utils.js';
+import { corsHeaders, generateUUID, auditLog, buildSessionCookie } from './utils.js';
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const LOGIN_RATE_LIMIT_MAX = 10;
@@ -154,7 +154,7 @@ async function logout(request, env) {
   const headers = {
     'Content-Type': 'application/json',
     ...corsHeaders(request),
-    'Set-Cookie': `sh_session=; HttpOnly; Secure; SameSite=Strict; Max-Age=0; Path=/`
+    'Set-Cookie': buildSessionCookie(request, '', 0)
   };
   return new Response(JSON.stringify({ ok: true }), { status: 200, headers });
 }
@@ -214,8 +214,7 @@ function json(data, status, request, sessionToken) {
     ...corsHeaders(request)
   };
   if (sessionToken) {
-    headers['Set-Cookie'] =
-      `sh_session=${sessionToken}; HttpOnly; Secure; SameSite=Strict; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}; Path=/`;
+    headers['Set-Cookie'] = buildSessionCookie(request, sessionToken, Math.floor(SESSION_TTL_MS / 1000));
   }
   return new Response(JSON.stringify(data), { status, headers });
 }
