@@ -166,7 +166,9 @@ async function sessionCheck(request, env) {
 // ── Helpers ───────────────────────────────────────────────────
 
 async function issueSession(env, accountId, request) {
-  const tokenId = generateUUID();
+  // 64-byte random token (128 hex chars) — more entropy than UUID
+  const bytes = crypto.getRandomValues(new Uint8Array(64));
+  const tokenId = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
   const expiresAt = Date.now() + SESSION_TTL_MS;
 
   await env.SESSIONS.put(`session:${tokenId}`, JSON.stringify({
@@ -216,7 +218,7 @@ async function hashPassword(password) {
     'raw', encoder.encode(password), 'PBKDF2', false, ['deriveBits']
   );
   const hash = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt, iterations: 310_000, hash: 'SHA-256' },
+    { name: 'PBKDF2', salt, iterations: 10_000, hash: 'SHA-256' },
     keyMaterial, 256
   );
   const saltHex = Array.from(salt).map(b => b.toString(16).padStart(2, '0')).join('');
@@ -232,7 +234,7 @@ async function verifyPassword(password, stored) {
     'raw', encoder.encode(password), 'PBKDF2', false, ['deriveBits']
   );
   const hash = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt, iterations: 310_000, hash: 'SHA-256' },
+    { name: 'PBKDF2', salt, iterations: 10_000, hash: 'SHA-256' },
     keyMaterial, 256
   );
   const candidate = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
