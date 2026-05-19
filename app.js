@@ -4,6 +4,9 @@
  * Runs AFTER main.js; bridges the existing game engine with the live backend.
  */
 
+const LIVE_WORKER_ORIGIN = 'https://cultiv.davidmergenthaler02.workers.dev';
+const OFFLINE_QUERY_PARAM = 'offline';
+
 const API = (() => {
   const BASE = ''; // same-origin
   const OFFLINE_HINT = 'Live auth is unavailable here. Use the deployed site for account play, or use offline mode from this page.';
@@ -47,9 +50,9 @@ let _gameState = null;
 let _cooldowns = {};
 let _afkStatus = null;
 let _pollTimer = null;
+let _offlineSyncTimer = null;
 let _cdAnimFrames = {};
 let _offlineMode = false;
-const OFFLINE_QUERY_PARAM = 'offline';
 
 // Realm names for display
 const REALM_NAMES = [
@@ -123,10 +126,7 @@ function setupAuthUI() {
     e.preventDefault();
     const offlineUrl = new URL(window.location.href);
     offlineUrl.searchParams.set(OFFLINE_QUERY_PARAM, '1');
-    if (offlineUrl.toString() !== window.location.href) {
-      window.location.assign(offlineUrl.toString());
-      return;
-    }
+    window.history.replaceState({}, '', offlineUrl.toString());
     enterOfflineMode();
   });
 
@@ -150,6 +150,9 @@ function getAuthFailureMessage(response, fallback) {
   if (response?.data?.error) {
     return response.data.error;
   }
+  if (response?.status === 404 && !isLiveWorkerOrigin()) {
+    return `This page is not running on the live worker origin. Use ${LIVE_WORKER_ORIGIN} for account play, or use offline mode here.`;
+  }
   if (response?.status === 404) {
     return 'Live API is unavailable on this deployment right now. Refresh in a moment or use offline mode.';
   }
@@ -167,19 +170,94 @@ function shouldBootOfflineMode() {
   return url.searchParams.get(OFFLINE_QUERY_PARAM) === '1';
 }
 
+function isLiveWorkerOrigin() {
+  return window.location.origin === LIVE_WORKER_ORIGIN;
+}
+
 function enterOfflineMode() {
   _offlineMode = true;
+  _account = { username: 'Guest' };
+  _afkStatus = null;
+  window._activeCharId = null;
   stopPolling();
+  startOfflineSync();
   setAuthError('login', '');
   setAuthError('register', '');
   showScreen('game');
   activatePanel('cultivate');
+  updateTopbarLogoutLabel();
+  showToast('Guest mode active. Progress stays in this browser until you sign into a live account.', 'warn');
 
   const url = new URL(window.location.href);
   if (url.searchParams.get(OFFLINE_QUERY_PARAM) === '1') {
     url.searchParams.delete(OFFLINE_QUERY_PARAM);
     window.history.replaceState({}, '', url.toString());
   }
+}
+
+function startOfflineSync() {
+  stopOfflineSync();
+  syncOfflineBridge();
+  _offlineSyncTimer = setInterval(syncOfflineBridge, 500);
+}
+
+function stopOfflineSync() {
+  if (_offlineSyncTimer) {
+    clearInterval(_offlineSyncTimer);
+    _offlineSyncTimer = null;
+  }
+}
+
+function syncOfflineBridge() {
+  const localState = window.state;
+  if (!localState) return false;
+
+  const realmIndex = Number(localState.realmIndex ?? 0);
+  const stageIndex = Number(localState.stageIndex ?? 0);
+  const xpThreshold = 100 + realmIndex * 50 + stageIndex * 20;
+
+  _character = {
+    name: getOfflineCharacterName(localState),
+    realm_index: realmIndex,
+    stage_index: stageIndex,
+    origin: 'Guest Mode'
+  };
+  _gameState = {
+    hp: Number(localState.hp ?? 0),
+    hpMax: Math.max(1, Number(localState.hpMax ?? 1)),
+    qi: Number(localState.qi ?? 0),
+    qiMax: Math.max(1, Number(localState.qiMax ?? 1)),
+    battleQi: Number(localState.battleQi ?? 0),
+    battleQiMax: Math.max(1, Number(localState.battleQiMax ?? 1)),
+    silver: Number(localState.wallet ?? 0),
+    cultivationXp: Math.min(xpThreshold, Number(localState.turn ?? 0)),
+    afkActive: false
+  };
+  _cooldowns = {};
+
+  renderAll();
+
+  const breakthroughDesc = document.getElementById('breakthrough-desc');
+  if (breakthroughDesc) {
+    breakthroughDesc.textContent = 'Guest mode uses your local prototype save. Actions here stay on this browser and do not hit the live service.';
+  }
+
+  const activeActionNote = document.getElementById('active-action-note');
+  if (activeActionNote) {
+    activeActionNote.textContent = 'Guest mode active. Use this to test flows without a live account.';
+  }
+
+  return true;
+}
+
+function getOfflineCharacterName(localState) {
+  const name = typeof localState?.playerName === 'string' ? localState.playerName.trim() : '';
+  return name || 'Guest Disciple';
+}
+
+function updateTopbarLogoutLabel() {
+  const logoutBtn = document.getElementById('topbar-logout');
+  if (logoutBtn) logoutBtn.textContent = _offlineMode ? 'Exit Guest' : 'Logout';
 }
 
 async function tryAutoLogin() {
@@ -195,7 +273,7 @@ async function tryAutoLogin() {
     await enterGame();
   } else {
     if (r.status === 404) {
-      setAuthError('login', 'Live API is not responding on this deployment yet. The game needs a fresh worker deploy.');
+      setAuthError('login', getAuthFailureMessage(r, 'Live API is not responding on this deployment yet. The game needs a fresh worker deploy.'));
     }
     showScreen('auth');
   }
@@ -295,16 +373,29 @@ async function selectCharacter(charId) {
   if (r.data.craftRewards?.length) showCraftRewards(r.data.craftRewards);
 
   showScreen('game');
+  updateTopbarLogoutLabel();
   renderAll();
   startPolling();
   checkAdminAccess();
 }
 
 async function signOut() {
+  if (_offlineMode) {
+    _offlineMode = false;
+    stopOfflineSync();
+    _account = _character = _gameState = null;
+    window._activeCharId = null;
+    updateTopbarLogoutLabel();
+    showScreen('auth');
+    return;
+  }
+
   await API.post('/api/auth/logout');
   _account = _character = _gameState = null;
   window._activeCharId = null;
   stopPolling();
+  stopOfflineSync();
+  updateTopbarLogoutLabel();
   showScreen('auth');
 }
 

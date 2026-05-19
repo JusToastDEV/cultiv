@@ -5627,6 +5627,9 @@ function render(state) {
 
 function bootstrap() {
   const state = loadState();
+  window.state = state;
+  window.saveState = saveState;
+  window.loadState = loadState;
   state.ui = {
     selectedSlot: null,
     manualLootIndex: null,
