@@ -635,6 +635,12 @@ function renderCultivatePanel() {
   if (profileRealm) profileRealm.textContent = `${realmName} · ${stageName}`;
   if (profileName) profileName.textContent = c.name;
 
+  // Dantian ring labels
+  const realmShort = document.getElementById('cult-realm-short');
+  const stageShort = document.getElementById('cult-stage-short');
+  if (realmShort) realmShort.textContent = realmName;
+  if (stageShort) stageShort.textContent = stageName.replace(' Stage', '');
+
   // Profile panel stats
   const profileRealmStat  = document.getElementById('profile-realm');
   const profileLongevity  = document.getElementById('profile-longevity');
@@ -649,12 +655,23 @@ function renderCultivatePanel() {
   if (profileBody)       profileBody.textContent = s.bodyXp ?? 0;
   if (profileSoul)       profileSoul.textContent = s.soulXp ?? 0;
 
-  // XP bar
+  // XP bar + substage dots
   const xpThreshold = 100 + c.realm_index * 50 + c.stage_index * 20;
   const xp = s.cultivationXp ?? 0;
+  const xpPct = Math.min(100, (xp / xpThreshold) * 100);
   if (cultXpVal) cultXpVal.textContent = `${xp} / ${xpThreshold}`;
-  if (cultXpFill) cultXpFill.style.width = `${Math.min(100, (xp / xpThreshold) * 100).toFixed(1)}%`;
+  if (cultXpFill) cultXpFill.style.width = `${xpPct.toFixed(1)}%`;
   if (cultRealm) cultRealm.textContent = `${realmName} · ${stageName}`;
+
+  // Substage dots: fill 1 at 33%, 2 at 66%, 3 at 100%
+  for (let i = 0; i < 3; i++) {
+    const dot = document.getElementById(`cult-dot-${i}`);
+    if (dot) dot.classList.toggle('filled', xpPct >= (i + 1) * 33.3);
+  }
+
+  // Breakthrough button pulse when ready
+  const btBtn = document.getElementById('btn-breakthrough');
+  if (btBtn) btBtn.classList.toggle('ready-pulse', xp >= xpThreshold);
 
   updateCooldownBars();
 }
