@@ -146,8 +146,8 @@ function setupAuthUI() {
   });
 
   // Logout buttons
-  document.getElementById('char-select-logout').addEventListener('click', signOut);
-  document.getElementById('topbar-logout').addEventListener('click', signOut);
+  document.getElementById('char-select-logout')?.addEventListener('click', signOut);
+  document.getElementById('topbar-logout')?.addEventListener('click', signOut);
 }
 
 function switchAuthTab(tab) {
@@ -497,9 +497,9 @@ async function signOut() {
 
 // ── Screen management ──────────────────────────────────────────
 function showScreen(screen) {
-  document.getElementById('auth-overlay').classList.toggle('hidden', screen !== 'auth');
-  document.getElementById('char-select-overlay').classList.toggle('hidden', screen !== 'charSelect');
-  document.getElementById('game-shell').classList.toggle('hidden', screen !== 'game');
+  document.getElementById('auth-overlay')?.classList.toggle('hidden', screen !== 'auth');
+  document.getElementById('char-select-overlay')?.classList.toggle('hidden', screen !== 'charSelect');
+  document.getElementById('game-shell')?.classList.toggle('hidden', screen !== 'game');
 }
 
 // ── Navigation ─────────────────────────────────────────────────
@@ -529,8 +529,12 @@ function activatePanel(panelId) {
 }
 
 function setupSidebarToggle() {
-  document.getElementById('sidebar-toggle').addEventListener('click', () => {
-    document.getElementById('sidebar').classList.toggle('open');
+  const toggle = document.getElementById('sidebar-toggle');
+  const sidebar = document.getElementById('sidebar');
+  if (!toggle || !sidebar) return;
+
+  toggle.addEventListener('click', () => {
+    sidebar.classList.toggle('open');
   });
 }
 
@@ -577,17 +581,24 @@ function renderAll() {
 function renderTopBar() {
   const s = _gameState;
   const c = _character;
-  document.getElementById('tb-char-name').textContent = c.name;
   const realmName = REALM_NAMES[c.realm_index] ?? `Realm ${c.realm_index}`;
-  document.getElementById('tb-realm').textContent = realmName;
+  const charName = document.getElementById('tb-char-name');
+  const realm = document.getElementById('tb-realm');
+  const hp = document.getElementById('tb-hp');
+  const qi = document.getElementById('tb-qi');
+  const bqi = document.getElementById('tb-bqi');
+  const silver = document.getElementById('tb-silver');
+
+  if (charName) charName.textContent = c.name;
+  if (realm) realm.textContent = realmName;
 
   setBar('tb-hp-fill', s.hp, s.hpMax);
   setBar('tb-qi-fill', s.qi, s.qiMax);
   setBar('tb-bqi-fill', s.battleQi, s.battleQiMax);
-  document.getElementById('tb-hp').textContent  = `${s.hp}/${s.hpMax}`;
-  document.getElementById('tb-qi').textContent  = `${s.qi}/${s.qiMax}`;
-  document.getElementById('tb-bqi').textContent = `${s.battleQi}/${s.battleQiMax}`;
-  document.getElementById('tb-silver').textContent = `💰 ${s.silver ?? 0} silver`;
+  if (hp) hp.textContent = `${s.hp}/${s.hpMax}`;
+  if (qi) qi.textContent = `${s.qi}/${s.qiMax}`;
+  if (bqi) bqi.textContent = `${s.battleQi}/${s.battleQiMax}`;
+  if (silver) silver.textContent = `${s.silver ?? 0} silver`;
 }
 
 function renderCultivatePanel() {
@@ -595,16 +606,22 @@ function renderCultivatePanel() {
   const c = _character;
   const realmName  = REALM_NAMES[c.realm_index]  ?? `Realm ${c.realm_index}`;
   const stageName  = STAGE_NAMES[c.stage_index]  ?? `Stage ${c.stage_index}`;
-  document.getElementById('cult-realm-label').textContent = `${realmName} · ${stageName}`;
-  document.getElementById('profile-realm-label').textContent = `${realmName} · ${stageName}`;
-  document.getElementById('profile-name').textContent = c.name;
+  const cultRealm = document.getElementById('cult-realm-label');
+  const profileRealm = document.getElementById('profile-realm-label');
+  const profileName = document.getElementById('profile-name');
+  const cultXpVal = document.getElementById('cult-xp-val');
+  const cultXpFill = document.getElementById('cult-xp-fill');
+
+  if (cultRealm) cultRealm.textContent = `${realmName} · ${stageName}`;
+  if (profileRealm) profileRealm.textContent = `${realmName} · ${stageName}`;
+  if (profileName) profileName.textContent = c.name;
 
   // XP bar
   const xpThreshold = 100 + c.realm_index * 50 + c.stage_index * 20;
   const xp = s.cultivationXp ?? 0;
-  document.getElementById('cult-xp-val').textContent = `${xp} / ${xpThreshold}`;
-  document.getElementById('cult-xp-fill').style.width = `${Math.min(100, (xp / xpThreshold) * 100).toFixed(1)}%`;
-  document.getElementById('cult-realm-label').textContent = `${realmName} · ${stageName}`;
+  if (cultXpVal) cultXpVal.textContent = `${xp} / ${xpThreshold}`;
+  if (cultXpFill) cultXpFill.style.width = `${Math.min(100, (xp / xpThreshold) * 100).toFixed(1)}%`;
+  if (cultRealm) cultRealm.textContent = `${realmName} · ${stageName}`;
 
   updateCooldownBars();
 }

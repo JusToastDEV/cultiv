@@ -54,35 +54,339 @@
     <div id="char-select-slots" class="char-slots"></div>
     <button type="button" id="char-select-logout" class="btn-ghost char-logout">Sign Out</button>
   </div>
-        </div>
-        <ul id="available-events-list" class="quest-list"></ul>
-      </div>
+ </div>
 
-      <!-- Event Log -->
-      <div class="hub-section hub-log">
-        <h3>Recent Events</h3>
-        <ol id="event-log" class="event-log-compact"></ol>
-      </div>
+ <div id="afk-toast" class="afk-toast hidden" role="status"></div>
 
-      <!-- Hub Navigation -->
-      <div class="hub-section hub-nav">
-        <h3>Menus</h3>
-        <div class="button-row">
-          <button id="open-inventory" type="button">Inventory</button>
-          <button id="open-status" type="button">Status</button>
-          <button id="open-equipment" type="button">Equipment</button>
-          <button id="open-techniques" type="button">Techniques</button>
-          <button id="open-map" type="button">Map</button>
-        </div>
-        <div class="button-row">
-          <button id="open-patron-hall" type="button">Patron Hall</button>
-          <button id="open-bank" type="button">Bank</button>
-          <button id="open-battle" type="button">Battle</button>
-          <button data-action="save">Save</button>
-        </div>
-      </div>
-    </section>
-  </main>
+ <div id="game-shell" class="game-shell hidden">
+   <header class="topbar">
+     <div class="topbar-brand">
+       <span class="topbar-logo">SH</span>
+       <span class="topbar-name" id="tb-char-name">Cultivator</span>
+       <span class="topbar-realm" id="tb-realm">Mortal</span>
+     </div>
+
+     <div class="topbar-stats">
+       <div class="tb-stat">
+         <span class="tb-stat-label">HP</span>
+         <div class="tb-bar"><div class="tb-fill tb-hp" id="tb-hp-fill"></div></div>
+         <span class="tb-stat-val" id="tb-hp">100/100</span>
+       </div>
+       <div class="tb-stat">
+         <span class="tb-stat-label">Qi</span>
+         <div class="tb-bar"><div class="tb-fill tb-qi" id="tb-qi-fill"></div></div>
+         <span class="tb-stat-val" id="tb-qi">100/100</span>
+       </div>
+       <div class="tb-stat">
+         <span class="tb-stat-label">BQi</span>
+         <div class="tb-bar"><div class="tb-fill tb-bqi" id="tb-bqi-fill"></div></div>
+         <span class="tb-stat-val" id="tb-bqi">30/30</span>
+       </div>
+     </div>
+
+     <div class="topbar-right">
+       <span class="tb-silver" id="tb-silver">0 silver</span>
+       <span class="tb-afk-badge hidden" id="tb-afk-badge">AFK</span>
+       <button class="tb-menu-toggle" id="sidebar-toggle" type="button" title="Menu">Menu</button>
+       <button class="btn-ghost tb-logout" id="topbar-logout" type="button">Sign Out</button>
+     </div>
+   </header>
+
+   <div class="game-layout">
+     <nav class="sidebar" id="sidebar">
+       <ul class="nav-list">
+         <li><a href="#" class="nav-item active" data-panel="city"><span class="nav-icon">C</span><span class="nav-label">City</span></a></li>
+         <li><a href="#" class="nav-item" data-panel="cultivate"><span class="nav-icon">Cu</span><span class="nav-label">Cultivate</span></a></li>
+         <li><a href="#" class="nav-item" data-panel="explore"><span class="nav-icon">Ex</span><span class="nav-label">Explore</span></a></li>
+         <li><a href="#" class="nav-item" data-panel="battle"><span class="nav-icon">Ba</span><span class="nav-label">Battle</span></a></li>
+         <li><a href="#" class="nav-item" data-panel="inventory"><span class="nav-icon">In</span><span class="nav-label">Inventory</span></a></li>
+         <li><a href="#" class="nav-item" data-panel="techniques"><span class="nav-icon">Te</span><span class="nav-label">Techniques</span></a></li>
+         <li><a href="#" class="nav-item" data-panel="afk"><span class="nav-icon">AFK</span><span class="nav-label">AFK</span><span class="nav-badge hidden" id="afk-nav-badge">!</span></a></li>
+         <li><a href="#" class="nav-item" data-panel="guild"><span class="nav-icon">Gu</span><span class="nav-label">Guild</span></a></li>
+         <li><a href="#" class="nav-item" data-panel="profile"><span class="nav-icon">Pr</span><span class="nav-label">Profile</span></a></li>
+         <li class="nav-admin hidden" id="nav-admin-li"><a href="#" class="nav-item nav-admin-link" data-panel="admin"><span class="nav-icon">Ad</span><span class="nav-label">Admin</span></a></li>
+       </ul>
+     </nav>
+
+     <main class="main-content" id="main-content">
+       <section id="panel-city" class="panel active">
+         <div class="panel-header">
+           <h2 id="city-name">Ember Court</h2>
+           <span class="panel-meta" id="city-region">Region: Ashen Frontier</span>
+         </div>
+         <div class="panel-grid-2">
+           <div class="card">
+             <h3>City Leads</h3>
+             <div class="btn-row">
+               <button class="btn-sm" data-action="cityAction">City Affairs</button>
+               <button class="btn-sm" data-action="exploreArea">Scout Wilds</button>
+             </div>
+             <ul id="available-events-list" class="quest-list mt-sm"></ul>
+           </div>
+           <div class="card">
+             <h3>Event Log</h3>
+             <ol id="event-log" class="event-log"></ol>
+           </div>
+         </div>
+
+         <div class="card mt-md">
+           <h3>Menus</h3>
+           <div class="btn-row">
+             <button id="open-inventory" type="button">Inventory</button>
+             <button id="open-status" type="button">Status</button>
+             <button id="open-equipment" type="button">Equipment</button>
+             <button id="open-techniques" type="button">Techniques</button>
+             <button id="open-map" type="button">Map</button>
+           </div>
+           <div class="btn-row mt-sm">
+             <button id="open-patron-hall" type="button">Patron Hall</button>
+             <button id="open-bank" type="button">Bank</button>
+             <button id="open-battle" type="button">Battle</button>
+             <button data-action="save">Save</button>
+           </div>
+         </div>
+       </section>
+
+       <section id="panel-cultivate" class="panel hidden">
+         <div class="panel-header">
+           <h2>Cultivation</h2>
+           <span class="panel-meta" id="cult-realm-label">Mortal - Stage 1</span>
+         </div>
+
+         <div class="card cult-progress-card">
+           <div class="cult-xp-row">
+             <span>Cultivation XP</span>
+             <span id="cult-xp-val">0 / 100</span>
+           </div>
+           <div class="xp-bar"><div class="xp-fill" id="cult-xp-fill" style="width:0%"></div></div>
+         </div>
+
+         <div class="panel-grid-3">
+           <div class="card action-card">
+             <h3>Meditate</h3>
+             <p class="card-desc">Refine your Qi and accumulate cultivation experience.</p>
+             <div class="cd-bar-wrap"><div class="cd-bar" id="cd-meditate"></div></div>
+             <button class="btn-primary btn-action" data-action="meditate" id="btn-meditate">Meditate</button>
+           </div>
+           <div class="card action-card">
+             <h3>Train Body</h3>
+             <p class="card-desc">Forge your body through sustained tempering.</p>
+             <div class="cd-bar-wrap"><div class="cd-bar" id="cd-trainBody"></div></div>
+             <button class="btn-primary btn-action" data-action="trainBody" id="btn-trainBody">Train Body</button>
+           </div>
+           <div class="card action-card">
+             <h3>Train Soul</h3>
+             <p class="card-desc">Expand your spirit sense and sharpen your will.</p>
+             <div class="cd-bar-wrap"><div class="cd-bar" id="cd-trainSoul"></div></div>
+             <button class="btn-primary btn-action" data-action="trainSoul" id="btn-trainSoul">Train Soul</button>
+           </div>
+         </div>
+
+         <div class="card mt-md">
+           <h3>Breakthrough</h3>
+           <p id="breakthrough-desc" class="card-desc">Gather enough cultivation XP to attempt your next breakthrough.</p>
+           <div id="breakthrough-check" class="breakthrough-check"></div>
+           <button class="btn-danger btn-action" data-action="breakthrough" id="btn-breakthrough">Attempt Breakthrough</button>
+         </div>
+
+         <div id="active-action-note" class="action-status mt-sm"></div>
+       </section>
+
+       <section id="panel-explore" class="panel hidden">
+         <div class="panel-header">
+           <h2>Zone Exploration</h2>
+           <span class="panel-meta" id="explore-realm-label">Your realm determines accessible zones</span>
+         </div>
+         <div class="explore-layout">
+           <div class="zone-list-col">
+             <div class="card">
+               <h3>Accessible Zones</h3>
+               <div id="zone-list" class="zone-list"></div>
+             </div>
+           </div>
+           <div class="zone-detail-col">
+             <div class="card" id="zone-detail-card">
+               <p class="text-muted">Select a zone to explore.</p>
+             </div>
+           </div>
+         </div>
+       </section>
+
+       <section id="panel-battle" class="panel hidden">
+         <div class="panel-header">
+           <h2>Battle</h2>
+           <span class="panel-meta">Open the battle command modal to engage enemies.</span>
+         </div>
+         <div class="card">
+           <h3>Combat Control</h3>
+           <p class="card-desc">Launch the battle interface to attack, defend, use techniques, or flee.</p>
+           <div class="btn-row">
+             <button id="open-battle-panel" type="button" onclick="document.getElementById('open-battle').click()">Open Battle Modal</button>
+           </div>
+         </div>
+       </section>
+
+       <section id="panel-inventory" class="panel hidden">
+         <div class="panel-header">
+           <h2>Inventory</h2>
+           <span class="panel-meta" id="inv-count">0 items</span>
+         </div>
+         <div class="card">
+           <h3>Equipment and Bag</h3>
+           <p class="card-desc">Use the existing inventory and equipment modals from the city menu.</p>
+           <div class="btn-row">
+             <button type="button" onclick="document.getElementById('open-inventory').click()">Open Inventory</button>
+             <button type="button" onclick="document.getElementById('open-equipment').click()">Open Equipment</button>
+           </div>
+         </div>
+       </section>
+
+       <section id="panel-techniques" class="panel hidden">
+         <div class="panel-header">
+           <h2>Techniques</h2>
+           <span class="panel-meta">Manage your cultivation and battle arts.</span>
+         </div>
+         <div class="card">
+           <h3>Technique Hall</h3>
+           <p class="card-desc">Open the techniques modal to set active methods and inspect learned arts.</p>
+           <div class="btn-row">
+             <button type="button" onclick="document.getElementById('open-techniques').click()">Open Techniques</button>
+           </div>
+         </div>
+       </section>
+
+       <section id="panel-afk" class="panel hidden">
+         <div class="panel-header">
+           <h2>Offline Training</h2>
+           <span class="panel-meta">Queue an action and collect rewards when you return.</span>
+         </div>
+         <div class="card" id="afk-active-card">
+           <h3>Current Status</h3>
+           <div id="afk-status-display" class="afk-status-idle">No active offline task.</div>
+           <button class="btn-ghost btn-sm mt-sm" id="btn-cancel-afk" style="display:none">Cancel AFK</button>
+         </div>
+         <div class="card mt-md hidden" id="afk-picker-card">
+           <h3>Start Offline Task</h3>
+           <div class="afk-options" id="afk-options">
+             <label class="afk-option"><input type="radio" name="afk-type" value="meditate" checked /><span><strong>Meditate</strong><em>Cultivation XP and Qi regeneration</em></span></label>
+             <label class="afk-option"><input type="radio" name="afk-type" value="herb-gather" /><span><strong>Herb Gathering</strong><em>Collect herbs passively</em></span></label>
+             <label class="afk-option"><input type="radio" name="afk-type" value="spirit-stone-mine" /><span><strong>Spirit Stone Mining</strong><em>Earn silver and spirit stones</em></span></label>
+             <label class="afk-option"><input type="radio" name="afk-type" value="alchemy-study" /><span><strong>Alchemy Study</strong><em>Alchemy XP over time</em></span></label>
+             <label class="afk-option"><input type="radio" name="afk-type" value="patrol-zone" /><span><strong>Patrol Zone</strong><em>Body XP and drop chances</em></span></label>
+             <label class="afk-option"><input type="radio" name="afk-type" value="guard-post" /><span><strong>Guard Post</strong><em>Best silver per hour</em></span></label>
+           </div>
+           <div class="afk-cap-note" id="afk-cap-note">Max duration scales with your realm.</div>
+           <button class="btn-primary mt-sm" id="btn-start-afk">Begin Offline Task</button>
+         </div>
+         <div class="card mt-md">
+           <h3>Last Collected Rewards</h3>
+           <div id="afk-rewards-display" class="afk-rewards-list">
+             <p class="text-muted">No rewards collected yet this session.</p>
+           </div>
+         </div>
+       </section>
+
+       <section id="panel-guild" class="panel hidden">
+         <div class="panel-header">
+           <h2>Guild</h2>
+           <span class="panel-meta">Sect and guild systems are still expanding.</span>
+         </div>
+         <div class="card">
+           <h3>Your Guild</h3>
+           <p class="text-muted">You are not a member of a guild or sect.</p>
+         </div>
+       </section>
+
+       <section id="panel-profile" class="panel hidden">
+         <div class="panel-header">
+           <h2 id="profile-name">Cultivator</h2>
+           <span class="panel-meta" id="profile-realm-label">Mortal - Stage 1</span>
+         </div>
+         <div class="card">
+           <h3>Status</h3>
+           <p class="card-desc">Use the status, equipment, bank, and patron modals from the city menu for the full legacy interface.</p>
+           <div class="btn-row">
+             <button type="button" onclick="document.getElementById('open-status').click()">Open Status</button>
+             <button type="button" onclick="document.getElementById('open-bank').click()">Open Bank</button>
+             <button type="button" onclick="document.getElementById('open-patron-hall').click()">Support Development</button>
+           </div>
+         </div>
+       </section>
+
+       <section id="panel-admin" class="panel hidden">
+         <div class="panel-header">
+           <h2>Admin Panel</h2>
+           <span class="panel-meta admin-badge">Staff Access</span>
+         </div>
+
+         <div class="admin-tabs btn-row">
+           <button class="btn-sm active" id="admin-tab-features" type="button">Features</button>
+           <button class="btn-sm" id="admin-tab-players" type="button">Players</button>
+           <button class="btn-sm" id="admin-tab-npcs" type="button">NPCs</button>
+           <button class="btn-sm" id="admin-tab-events" type="button">Events</button>
+           <button class="btn-sm" id="admin-tab-audit" type="button">Audit Log</button>
+           <button class="btn-sm" id="admin-tab-stats" type="button">Stats</button>
+         </div>
+
+         <div class="card mt-md" id="admin-features-panel">
+           <h3>Feature Tracker</h3>
+           <div id="admin-feature-list" class="feature-list"></div>
+           <div class="form-row mt-sm">
+             <input type="text" id="admin-feature-id" placeholder="feature-id" class="form-input" />
+             <select id="admin-feature-status" class="form-select">
+               <option value="planned">Planned</option>
+               <option value="in-progress">In Progress</option>
+               <option value="testing">Testing</option>
+               <option value="live">Live</option>
+               <option value="disabled">Disabled</option>
+             </select>
+             <input type="text" id="admin-feature-notes" placeholder="Notes" class="form-input" style="flex:2" />
+             <button class="btn-sm btn-primary" id="admin-feature-save" type="button">Save</button>
+           </div>
+         </div>
+
+         <div class="card mt-md hidden" id="admin-players-panel">
+           <h3>Player Management</h3>
+           <div class="form-row">
+             <input type="text" id="admin-player-search" placeholder="Username or ID" class="form-input" />
+             <button class="btn-sm" id="admin-player-lookup" type="button">Lookup</button>
+           </div>
+           <div id="admin-player-result" class="mt-sm"></div>
+         </div>
+
+         <div class="card mt-md hidden" id="admin-npcs-panel">
+           <h3>NPC World State</h3>
+           <div id="admin-npc-list" class="npc-admin-list"></div>
+           <button class="btn-sm mt-sm" id="admin-npc-refresh" type="button">Refresh</button>
+         </div>
+
+         <div class="card mt-md hidden" id="admin-events-panel">
+           <h3>World Events</h3>
+           <div id="admin-event-list" class="feature-list"></div>
+           <h4 class="mt-sm">Spawn Event</h4>
+           <div class="form-row">
+             <input type="text" id="admin-event-title" placeholder="Title" class="form-input" />
+             <input type="text" id="admin-event-desc" placeholder="Description" class="form-input" style="flex:2" />
+             <input type="number" id="admin-event-duration" placeholder="Hours" value="24" class="form-input" style="width:80px" />
+             <button class="btn-sm btn-primary" id="admin-event-spawn" type="button">Spawn</button>
+           </div>
+         </div>
+
+         <div class="card mt-md hidden" id="admin-audit-panel">
+           <h3>Audit Log</h3>
+           <div id="admin-audit-list" class="audit-list"></div>
+           <button class="btn-sm mt-sm" id="admin-audit-refresh" type="button">Refresh</button>
+         </div>
+
+         <div class="card mt-md hidden" id="admin-stats-panel">
+           <h3>Game Statistics</h3>
+           <div id="admin-stats-display" class="stats-display"></div>
+           <button class="btn-sm mt-sm" id="admin-stats-refresh" type="button">Refresh</button>
+         </div>
+       </section>
+     </main>
+   </div>
+ </div>
 
   <section id="inventory-modal" class="floating-panel hidden" aria-hidden="true">
     <header id="inventory-drag-handle" class="floating-header">
