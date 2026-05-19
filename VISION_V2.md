@@ -154,6 +154,12 @@ The structure should remain legible.
 - Core quality should influence later ceiling, not just current power.
 - Breakthrough materials, mentor support, environmental fit, and mental state should affect quality.
 
+### Passive sub-stages and mini breakthroughs
+- Each major realm should contain smaller thresholds the player grows into before the main breakthrough wall.
+- These sub-stages should reward preparation, lucky finds, strong manuals, body quality, and disciplined routing.
+- Main breakthroughs remain the dramatic gate, but mini breakthroughs should create visible power differences between players in the same named realm.
+- The goal is variance that feels earned or discovered, not pure RNG clown swings.
+
 ### Qigong-derived design language
 Draw from body, breath, and mind regulation rather than pure fantasy numbers.
 Cultivation actions should meaningfully map to:
@@ -357,6 +363,8 @@ The player should think "I lost because I made a bad choice" not "the system jus
 - low nesting
 - fast state readability
 - atmospheric without performance bloat
+- visually distinct from neon idle-cultivator clones
+- prioritizes committed choices over letting the player run every major loop at once
 
 ### Core navigation targets
 - Cultivate
@@ -371,6 +379,19 @@ The player should think "I lost because I made a bad choice" not "the system jus
 - cultivation actions should have subtle motion signatures
 - combat feedback should be immediate and sharp
 - item icons should eventually become lightweight SVG or similarly cheap assets
+
+### Visual identity guardrails
+- Do not copy the cyan-purple neon browser-idle look that already dominates low-effort cultivation games.
+- Favor grounded materials and region identity: ink black, oxidized bronze, aged paper, lacquer red, jade, moonlit fog, sect banners, map marks, and localized elemental accents.
+- Typography should feel chosen, not default. Headings can be ceremonial and sharp; body text must stay clean and highly readable.
+- Navigation should read like places and responsibilities, not a row of monetized dashboard tabs.
+- Inventory, crafting, profile, and quest views should look like parts of the same world rather than isolated admin widgets.
+
+### Interaction density rule
+- The player should not be able to optimize every major activity at once with no tradeoff.
+- Long cultivation, travel, sect duty, farming, crafting, escort work, and dangerous exploration should compete for time, location, or helper capacity.
+- Offline gains are good, but the best rewards should often come from choosing a focus and understanding where to personally intervene.
+- This keeps the game feeling like a living cultivation world instead of a passive spreadsheet of simultaneous timers.
 
 ### Motion rules
 - use ambient pulses, micro-shakes, reveal timing, and elemental accents

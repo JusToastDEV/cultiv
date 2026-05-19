@@ -6,6 +6,7 @@
 
 const API = (() => {
   const BASE = ''; // same-origin
+  const OFFLINE_HINT = 'Live auth is unavailable here. Use the deployed site for account play, or use offline mode from this page.';
 
   async function call(method, path, body) {
     const opts = {
@@ -15,9 +16,21 @@ const API = (() => {
     };
     if (body !== undefined) opts.body = JSON.stringify(body);
     if (window._activeCharId) opts.headers['X-Character-Id'] = window._activeCharId;
-    const res = await fetch(BASE + path, opts);
-    const data = await res.json().catch(() => ({}));
-    return { ok: res.ok, status: res.status, data };
+    try {
+      const res = await fetch(BASE + path, opts);
+      const data = await res.json().catch(() => ({}));
+      return { ok: res.ok, status: res.status, data };
+    } catch (error) {
+      const isFileMode = window.location.protocol === 'file:';
+      return {
+        ok: false,
+        status: 0,
+        data: {
+          error: isFileMode ? OFFLINE_HINT : 'Network error. Please try again.'
+        },
+        networkError: error
+      };
+    }
   }
 
   return {
@@ -103,9 +116,9 @@ function setupAuthUI() {
   document.getElementById('play-offline-link').addEventListener('click', e => {
     e.preventDefault();
     _offlineMode = true;
+    stopPolling();
     showScreen('game');
-    // The existing main.js handles offline localStorage state
-    if (typeof initGame === 'function') initGame();
+    activatePanel('cultivate');
   });
 
   // Logout buttons
@@ -125,11 +138,20 @@ function setAuthError(form, msg) {
 }
 
 async function tryAutoLogin() {
+  if (window.location.protocol === 'file:') {
+    showScreen('auth');
+    setAuthError('login', 'Local file mode only supports offline play. Use the link below to test the game without the API.');
+    return;
+  }
+
   const r = await API.get('/api/auth/session');
   if (r.ok && r.data.authenticated) {
     _account = r.data;
     await enterGame();
   } else {
+    if (r.status === 404) {
+      setAuthError('login', 'Live API is not responding on this deployment yet. The game needs a fresh worker deploy.');
+    }
     showScreen('auth');
   }
 }
