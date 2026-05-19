@@ -49,6 +49,7 @@ let _afkStatus = null;
 let _pollTimer = null;
 let _cdAnimFrames = {};
 let _offlineMode = false;
+const OFFLINE_QUERY_PARAM = 'offline';
 
 // Realm names for display
 const REALM_NAMES = [
@@ -70,6 +71,11 @@ window.addEventListener('DOMContentLoaded', () => {
   setupAFKPanel();
   setupAdminPanel();
   setupExplorePanel();
+
+  if (shouldBootOfflineMode()) {
+    enterOfflineMode();
+    return;
+  }
 
   // Check for existing session
   tryAutoLogin();
@@ -115,10 +121,13 @@ function setupAuthUI() {
   // Offline play link
   document.getElementById('play-offline-link').addEventListener('click', e => {
     e.preventDefault();
-    _offlineMode = true;
-    stopPolling();
-    showScreen('game');
-    activatePanel('cultivate');
+    const offlineUrl = new URL(window.location.href);
+    offlineUrl.searchParams.set(OFFLINE_QUERY_PARAM, '1');
+    if (offlineUrl.toString() !== window.location.href) {
+      window.location.assign(offlineUrl.toString());
+      return;
+    }
+    enterOfflineMode();
   });
 
   // Logout buttons
@@ -151,6 +160,26 @@ function getAuthFailureMessage(response, fallback) {
     return `${fallback} (HTTP ${response.status})`;
   }
   return fallback;
+}
+
+function shouldBootOfflineMode() {
+  const url = new URL(window.location.href);
+  return url.searchParams.get(OFFLINE_QUERY_PARAM) === '1';
+}
+
+function enterOfflineMode() {
+  _offlineMode = true;
+  stopPolling();
+  setAuthError('login', '');
+  setAuthError('register', '');
+  showScreen('game');
+  activatePanel('cultivate');
+
+  const url = new URL(window.location.href);
+  if (url.searchParams.get(OFFLINE_QUERY_PARAM) === '1') {
+    url.searchParams.delete(OFFLINE_QUERY_PARAM);
+    window.history.replaceState({}, '', url.toString());
+  }
 }
 
 async function tryAutoLogin() {
