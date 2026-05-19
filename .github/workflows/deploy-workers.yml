@@ -1,5 +1,8 @@
 name: Deploy Workers API
 
+env:
+  WORKER_HEALTHCHECK_URL: https://cultiv.davidmergenthaler02.workers.dev/api/auth/session
+
 on:
   push:
     branches:
@@ -26,9 +29,35 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Dry Run Worker Build
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: workers
+          command: deploy --dry-run
+
       - name: Deploy Workers
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: workers
+
+      - name: Verify Live Auth Route
+        shell: bash
+        run: |
+          for attempt in 1 2 3 4 5; do
+            status="$(curl -sS -o auth-session.json -w '%{http_code}' "$WORKER_HEALTHCHECK_URL")"
+            if [ "$status" = "200" ] && grep -q '"authenticated"' auth-session.json; then
+              cat auth-session.json
+              exit 0
+            fi
+
+            echo "Auth health check attempt $attempt failed with status $status"
+            cat auth-session.json || true
+            sleep 5
+          done
+
+          echo "Live auth route did not become healthy after deploy"
+          exit 1

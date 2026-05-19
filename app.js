@@ -92,7 +92,7 @@ function setupAuthUI() {
       _account = r.data;
       await enterGame();
     } else {
-      setAuthError('login', r.data.error || 'Login failed');
+      setAuthError('login', getAuthFailureMessage(r, 'Login failed'));
     }
   });
 
@@ -108,7 +108,7 @@ function setupAuthUI() {
       _account = r.data;
       await enterGame();
     } else {
-      setAuthError('register', r.data.error || 'Registration failed');
+      setAuthError('register', getAuthFailureMessage(r, 'Registration failed'));
     }
   });
 
@@ -135,6 +135,22 @@ function switchAuthTab(tab) {
 
 function setAuthError(form, msg) {
   document.getElementById(`${form}-error`).textContent = msg;
+}
+
+function getAuthFailureMessage(response, fallback) {
+  if (response?.data?.error) {
+    return response.data.error;
+  }
+  if (response?.status === 404) {
+    return 'Live API is unavailable on this deployment right now. Refresh in a moment or use offline mode.';
+  }
+  if (response?.status === 0) {
+    return response?.data?.error || fallback;
+  }
+  if (response?.status) {
+    return `${fallback} (HTTP ${response.status})`;
+  }
+  return fallback;
 }
 
 async function tryAutoLogin() {
