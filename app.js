@@ -716,6 +716,14 @@ function updateCooldownBars() {
   const stopBtn = document.getElementById('btn-stop-action');
   const ribbon = document.getElementById('action-ribbon');
   const ribbonText = document.getElementById('action-ribbon-text');
+  const dantianRing = document.getElementById('cult-dantian-ring');
+
+  // Update card active states
+  const CARD_MAP = { meditate: 'cult-card-meditate', trainBody: 'cult-card-trainBody', trainSoul: 'cult-card-trainSoul' };
+  for (const [action, cardId] of Object.entries(CARD_MAP)) {
+    document.getElementById(cardId)?.classList.toggle('is-active', action === activeKey);
+  }
+  if (dantianRing) dantianRing.classList.toggle('is-active', activeKey !== null);
 
   if (activeKey) {
     const label = ACTION_LABELS[activeKey] ?? activeKey;
