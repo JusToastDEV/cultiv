@@ -21,7 +21,7 @@ The current live build runs on a Cloudflare Worker that serves both the API and 
 
 Open `index.html` in a browser for static frontend work.
 
-For live-service testing, run the Worker stack instead of relying on offline-only behavior.
+For live-service testing, run the Worker stack instead of relying on guest/local-browser behavior.
 
 All deploy and worker commands should now be run from the repo root.
 The root `wrangler.toml` is the deploy entrypoint that GitHub and local manual deploys should both use.

@@ -5,11 +5,11 @@
  */
 
 const LIVE_WORKER_ORIGIN = 'https://cultiv.davidmergenthaler02.workers.dev';
-const OFFLINE_QUERY_PARAM = 'offline';
+const GUEST_MODE_STORAGE_KEY = 'sh_guest_mode';
 
 const API = (() => {
   const BASE = ''; // same-origin
-  const OFFLINE_HINT = 'Live auth is unavailable here. Use the deployed site for account play, or use offline mode from this page.';
+  const GUEST_MODE_HINT = 'Live auth is unavailable here. Use the deployed site for account play, or continue as a guest in this browser.';
 
   async function call(method, path, body) {
     const opts = {
@@ -29,7 +29,7 @@ const API = (() => {
         ok: false,
         status: 0,
         data: {
-          error: isFileMode ? OFFLINE_HINT : 'Network error. Please try again.'
+          error: isFileMode ? GUEST_MODE_HINT : 'Network error. Please try again.'
         },
         networkError: error
       };
@@ -50,9 +50,9 @@ let _gameState = null;
 let _cooldowns = {};
 let _afkStatus = null;
 let _pollTimer = null;
-let _offlineSyncTimer = null;
+let _guestSyncTimer = null;
 let _cdAnimFrames = {};
-let _offlineMode = false;
+let _guestMode = false;
 
 // Realm names for display
 const REALM_NAMES = [
@@ -89,11 +89,6 @@ window.addEventListener('DOMContentLoaded', () => {
   setupAFKPanel();
   setupAdminPanel();
   setupExplorePanel();
-
-  if (shouldBootOfflineMode()) {
-    enterOfflineMode();
-    return;
-  }
 
   // Check for existing session
   tryAutoLogin();
@@ -136,13 +131,10 @@ function setupAuthUI() {
     }
   });
 
-  // Offline play link
-  document.getElementById('play-offline-link').addEventListener('click', e => {
+  // Guest mode link
+  document.getElementById('play-guest-link')?.addEventListener('click', e => {
     e.preventDefault();
-    const offlineUrl = new URL(window.location.href);
-    offlineUrl.searchParams.set(OFFLINE_QUERY_PARAM, '1');
-    window.history.replaceState({}, '', offlineUrl.toString());
-    enterOfflineMode();
+    enterGuestMode();
   });
 
   // Logout buttons
@@ -166,10 +158,10 @@ function getAuthFailureMessage(response, fallback) {
     return response.data.error;
   }
   if (response?.status === 404 && !isLiveWorkerOrigin()) {
-    return `This page is not running on the live worker origin. Use ${LIVE_WORKER_ORIGIN} for account play, or use offline mode here.`;
+    return `This page is not running on the live worker origin. Use ${LIVE_WORKER_ORIGIN} for account play, or continue as a guest here.`;
   }
   if (response?.status === 404) {
-    return 'Live API is unavailable on this deployment right now. Refresh in a moment or use offline mode.';
+    return 'Live API is unavailable on this deployment right now. Refresh in a moment or continue as a guest.';
   }
   if (response?.status === 0) {
     return response?.data?.error || fallback;
@@ -180,50 +172,64 @@ function getAuthFailureMessage(response, fallback) {
   return fallback;
 }
 
-function shouldBootOfflineMode() {
-  const url = new URL(window.location.href);
-  return url.searchParams.get(OFFLINE_QUERY_PARAM) === '1';
+function shouldResumeGuestMode() {
+  try {
+    return window.localStorage.getItem(GUEST_MODE_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function rememberGuestMode() {
+  try {
+    window.localStorage.setItem(GUEST_MODE_STORAGE_KEY, '1');
+  } catch {
+    // Ignore storage failures and keep guest mode in-memory only.
+  }
+}
+
+function forgetGuestMode() {
+  try {
+    window.localStorage.removeItem(GUEST_MODE_STORAGE_KEY);
+  } catch {
+    // Ignore storage failures.
+  }
 }
 
 function isLiveWorkerOrigin() {
   return window.location.origin === LIVE_WORKER_ORIGIN;
 }
 
-function enterOfflineMode() {
-  _offlineMode = true;
+function enterGuestMode() {
+  rememberGuestMode();
+  _guestMode = true;
   _account = { username: 'Guest' };
   _afkStatus = null;
   window._activeCharId = null;
   stopPolling();
-  startOfflineSync();
+  startGuestSync();
   setAuthError('login', '');
   setAuthError('register', '');
   showScreen('game');
   activatePanel('cultivate');
   updateTopbarLogoutLabel();
   showToast('Guest mode active. Progress stays in this browser until you sign into a live account.', 'warn');
+}
 
-  const url = new URL(window.location.href);
-  if (url.searchParams.get(OFFLINE_QUERY_PARAM) === '1') {
-    url.searchParams.delete(OFFLINE_QUERY_PARAM);
-    window.history.replaceState({}, '', url.toString());
+function startGuestSync() {
+  stopGuestSync();
+  syncGuestBridge();
+  _guestSyncTimer = setInterval(syncGuestBridge, 500);
+}
+
+function stopGuestSync() {
+  if (_guestSyncTimer) {
+    clearInterval(_guestSyncTimer);
+    _guestSyncTimer = null;
   }
 }
 
-function startOfflineSync() {
-  stopOfflineSync();
-  syncOfflineBridge();
-  _offlineSyncTimer = setInterval(syncOfflineBridge, 500);
-}
-
-function stopOfflineSync() {
-  if (_offlineSyncTimer) {
-    clearInterval(_offlineSyncTimer);
-    _offlineSyncTimer = null;
-  }
-}
-
-function syncOfflineBridge() {
+function syncGuestBridge() {
   const localState = window.state;
   if (!localState) return false;
 
@@ -232,7 +238,7 @@ function syncOfflineBridge() {
   const xpThreshold = 100 + realmIndex * 50 + stageIndex * 20;
 
   _character = {
-    name: getOfflineCharacterName(localState),
+    name: getGuestCharacterName(localState),
     realm_index: realmIndex,
     stage_index: stageIndex,
     origin: 'Guest Mode'
@@ -265,30 +271,41 @@ function syncOfflineBridge() {
   return true;
 }
 
-function getOfflineCharacterName(localState) {
+function getGuestCharacterName(localState) {
   const name = typeof localState?.playerName === 'string' ? localState.playerName.trim() : '';
   return name || 'Guest Disciple';
 }
 
 function updateTopbarLogoutLabel() {
   const logoutBtn = document.getElementById('topbar-logout');
-  if (logoutBtn) logoutBtn.textContent = _offlineMode ? 'Exit Guest' : 'Logout';
+  if (logoutBtn) logoutBtn.textContent = _guestMode ? 'Exit Guest' : 'Logout';
 }
 
 async function tryAutoLogin() {
   if (window.location.protocol === 'file:') {
+    if (shouldResumeGuestMode()) {
+      enterGuestMode();
+      return;
+    }
     showScreen('auth');
-    setAuthError('login', 'Local file mode only supports offline play. Use the link below to test the game without the API.');
+    setAuthError('login', 'Local file mode does not support live auth. Use guest mode below if you want a browser-only save.');
     return;
   }
 
   const r = await API.get('/api/auth/session');
   if (r.ok && r.data.authenticated) {
+    forgetGuestMode();
     _account = r.data;
     await enterGame();
   } else {
+    if (shouldResumeGuestMode()) {
+      enterGuestMode();
+      return;
+    }
     if (r.status === 404) {
       setAuthError('login', getAuthFailureMessage(r, 'Live API is not responding on this deployment yet. The game needs a fresh worker deploy.'));
+    } else if (r.status === 0) {
+      setAuthError('login', getAuthFailureMessage(r, 'Live auth is currently unreachable.'));
     }
     showScreen('auth');
   }
@@ -476,9 +493,10 @@ async function selectCharacter(charId) {
 }
 
 async function signOut() {
-  if (_offlineMode) {
-    _offlineMode = false;
-    stopOfflineSync();
+  if (_guestMode) {
+    _guestMode = false;
+    forgetGuestMode();
+    stopGuestSync();
     _account = _character = _gameState = null;
     window._activeCharId = null;
     updateTopbarLogoutLabel();
@@ -490,7 +508,7 @@ async function signOut() {
   _account = _character = _gameState = null;
   window._activeCharId = null;
   stopPolling();
-  stopOfflineSync();
+  stopGuestSync();
   updateTopbarLogoutLabel();
   showScreen('auth');
 }
@@ -559,7 +577,7 @@ function stopPolling() {
 }
 
 async function pollState() {
-  if (!window._activeCharId || _offlineMode) return;
+  if (!window._activeCharId || _guestMode) return;
   const r = await API.get('/api/game/state');
   if (!r.ok) return;
   _gameState  = r.data.state;
@@ -702,7 +720,7 @@ function setupCultivatePanel() {
 }
 
 async function doAction(action, options = {}) {
-  if (_offlineMode || !window._activeCharId) return;
+  if (_guestMode || !window._activeCharId) return;
 
   const r = await API.post('/api/game/action', { action, options });
   if (!r.ok) {
@@ -750,7 +768,7 @@ function setupExplorePanel() {
 }
 
 async function loadZones() {
-  if (_offlineMode || !_character) return;
+  if (_guestMode || !_character) return;
   const r = await API.get('/api/zones');
   if (!r.ok) return;
 
@@ -841,7 +859,7 @@ async function exploreNode(nodeId, zoneId) {
 
 // ── Inventory ──────────────────────────────────────────────────
 async function loadInventory() {
-  if (_offlineMode || !_character) return;
+  if (_guestMode || !_character) return;
   const r = await API.get('/api/inventory');
   if (!r.ok) return;
 
@@ -890,7 +908,7 @@ function setupAFKPanel() {
 }
 
 async function loadAfkStatus() {
-  if (_offlineMode || !_character) return;
+  if (_guestMode || !_character) return;
   const r = await API.get('/api/afk');
   if (!r.ok) return;
   _afkStatus = r.data;
@@ -1173,7 +1191,7 @@ function escHtml(str) {
     window.saveState = function(...args) {
       orig.apply(this, args);
       // If connected, sync state to server (fire and forget)
-      if (!_offlineMode && window._activeCharId && window.state) {
+      if (!_guestMode && window._activeCharId && window.state) {
         API.post('/api/game/sync', { state: window.state }).catch(() => {});
       }
     };

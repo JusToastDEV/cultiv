@@ -1450,8 +1450,8 @@ button:disabled {
 .auth-form input { background:var(--bg-0);border:1px solid var(--border);border-radius:8px;color:var(--ink-0);padding:.55rem .8rem;font-size:.95rem; }
 .auth-form input:focus { outline:none;border-color:var(--accent-jade); }
 .auth-error { color:var(--danger);font-size:.85rem;margin:0;min-height:1.2em; }
-.auth-offline-note { text-align:center;font-size:.8rem;color:var(--ink-2);margin-top:.8rem; }
-.auth-offline-note a { color:var(--accent-jade); }
+.auth-guest-note { text-align:center;font-size:.8rem;color:var(--ink-2);margin-top:.8rem; }
+.auth-guest-note a { color:var(--accent-jade); }
 
 .char-select-overlay { position:fixed;inset:0;z-index:900;background:var(--bg-0);display:flex;align-items:center;justify-content:center; }
 .char-select-box { width:100%;max-width:600px;padding:2rem; }

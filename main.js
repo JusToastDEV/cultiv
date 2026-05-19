@@ -5275,28 +5275,37 @@ function render(state) {
   recalculateDerivedStats(state);
   normalizeInventorySize(state);
 
+  const setTextIfPresent = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  };
+  const setWidthIfPresent = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.style.width = value;
+  };
+
   const hpPct = Math.round((state.hp / state.hpMax) * 100);
   const qiPct = Math.round((state.qi / state.qiMax) * 100);
   const bqPct = state.battleQiMax > 0 ? Math.round((state.battleQi / state.battleQiMax) * 100) : 0;
   const lifePct = Math.round((state.longevityCurrent / state.longevityMax) * 100);
 
-  document.getElementById("current-region").textContent = `Region: ${getCurrentRegion(state).name}`;
-  document.getElementById("current-city").textContent = `City: ${getCurrentCity(state).name}`;
-  document.getElementById("current-area").textContent = `Area: ${getCurrentArea(state)?.name || "None"}`;
-  document.getElementById("realm-display").textContent = `Realm: ${getRealmStageLabel(state)}`;
+  setTextIfPresent("current-region", `Region: ${getCurrentRegion(state).name}`);
+  setTextIfPresent("current-city", `City: ${getCurrentCity(state).name}`);
+  setTextIfPresent("current-area", `Area: ${getCurrentArea(state)?.name || "None"}`);
+  setTextIfPresent("realm-display", `Realm: ${getRealmStageLabel(state)}`);
 
-  document.getElementById("hp-display").textContent = `${state.hp} / ${state.hpMax}`;
-  document.getElementById("qi-display").textContent = `${state.qi} / ${state.qiMax}`;
-  document.getElementById("battle-qi-display").textContent = `${state.battleQi} / ${state.battleQiMax}`;
-  document.getElementById("longevity-display").textContent = `${state.longevityCurrent} / ${state.longevityMax}`;
+  setTextIfPresent("hp-display", `${state.hp} / ${state.hpMax}`);
+  setTextIfPresent("qi-display", `${state.qi} / ${state.qiMax}`);
+  setTextIfPresent("battle-qi-display", `${state.battleQi} / ${state.battleQiMax}`);
+  setTextIfPresent("longevity-display", `${state.longevityCurrent} / ${state.longevityMax}`);
 
-  document.getElementById("hp-meter").style.width = `${hpPct}%`;
-  document.getElementById("qi-meter").style.width = `${qiPct}%`;
-  document.getElementById("battle-qi-meter").style.width = `${bqPct}%`;
-  document.getElementById("longevity-meter").style.width = `${lifePct}%`;
+  setWidthIfPresent("hp-meter", `${hpPct}%`);
+  setWidthIfPresent("qi-meter", `${qiPct}%`);
+  setWidthIfPresent("battle-qi-meter", `${bqPct}%`);
+  setWidthIfPresent("longevity-meter", `${lifePct}%`);
 
   const gcd = globalCooldownRemaining(state);
-  document.getElementById("global-cooldown-note").textContent = gcd > 0 ? `Global Cooldown: ${formatSeconds(gcd)}` : "Global Cooldown: Ready";
+  setTextIfPresent("global-cooldown-note", gcd > 0 ? `Global Cooldown: ${formatSeconds(gcd)}` : "Global Cooldown: Ready");
   
   const cooldownNote = document.getElementById("cooldown-note");
   if (cooldownNote) {
