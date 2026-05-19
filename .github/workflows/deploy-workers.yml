@@ -34,15 +34,14 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: workers
-          command: deploy --dry-run
+          command: deploy --dry-run --config wrangler.toml --cwd workers
 
       - name: Deploy Workers
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: workers
+          command: deploy --config wrangler.toml --cwd workers
 
       - name: Verify Live Auth Route
         shell: bash
