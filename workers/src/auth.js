@@ -4,7 +4,7 @@
  * Session tokens stored in KV with 30-day TTL
  */
 
-import { json, corsHeaders, generateUUID, auditLog } from './utils.js';
+import { corsHeaders, generateUUID, auditLog } from './utils.js';
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const LOGIN_RATE_LIMIT_MAX = 10;

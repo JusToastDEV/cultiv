@@ -44,7 +44,17 @@ export default {
         return await handleAuth(request, env, path);
       }
 
-      // ── All other routes require a valid session ────────────
+      // ── Static assets — serve directly, no auth required ───
+      if (!path.startsWith('/api/')) {
+        if (env.ASSETS) {
+          const assetResp = await env.ASSETS.fetch(request);
+          if (assetResp.status !== 404) return assetResp;
+          return env.ASSETS.fetch(new URL('/', request.url).toString());
+        }
+        return json({ error: 'Not found' }, 404, request);
+      }
+
+      // ── All other API routes require a valid session ────────
       const account = await getSessionAccount(request, env);
       if (!account) {
         return json({ error: 'Unauthorized' }, 401, request);
@@ -94,6 +104,7 @@ export default {
         return await handleAdmin(request, env, account, path);
       }
 
+      // Unrecognized API route
       return json({ error: 'Not found' }, 404, request);
     } catch (err) {
       console.error('Worker error:', err);
