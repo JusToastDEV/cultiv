@@ -1106,8 +1106,7 @@ function setupExplorePanel() {
   // No drag setup needed — tile grid is static (centered on player)
 }
 
-
-    { id: 'jade-delta',       name: 'Jade Delta',         world: 'Verdant World',  danger: 'Low-Mid',     resources: 'Spirit herbs, alchemy reagents',neighbors: ['ashen-frontier','void-rift'] },
+async function loadZones() {
     { id: 'iron-wilds',       name: 'Iron Wilds',         world: 'Ashen World',    danger: 'Mid',         resources: 'Beast cores, blood jade',       neighbors: ['ashen-frontier','void-rift'] },
     { id: 'void-rift',        name: 'Void Rift March',    world: 'Mirror World',   danger: 'High',        resources: 'Array ore, rare relic fragments',neighbors: ['jade-delta','iron-wilds','celestial-plateau'] },
     { id: 'celestial-plateau',name: 'Celestial Plateau',  world: 'Upper Heaven',   danger: 'Extreme',     resources: 'Void lotuses, saint bone, star-metal', neighbors: ['void-rift','sovereign-wastes'] },
