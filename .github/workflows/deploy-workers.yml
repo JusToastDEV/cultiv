@@ -37,10 +37,10 @@ jobs:
           node-version: '20'
 
       - name: Dry Run Worker Build
-        run: npx wrangler deploy --dry-run --config wrangler.toml --cwd workers
+        run: npm run deploy:dry-run
 
       - name: Deploy Workers
-        run: npx wrangler deploy --config wrangler.toml --cwd workers
+        run: npm run deploy
 
       - name: Verify Live Auth Route
         shell: bash

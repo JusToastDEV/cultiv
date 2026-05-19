@@ -1,0 +1,12 @@
+{
+  "name": "sealed-heavens-root",
+  "private": true,
+  "scripts": {
+    "build:assets": "node ./workers/scripts/build-assets.mjs",
+    "deploy:dry-run": "npx wrangler deploy --dry-run",
+    "deploy": "npx wrangler deploy",
+    "dev": "npx wrangler dev",
+    "db:migrate": "npx wrangler d1 execute sealed-heavens-db --file ./workers/schema.sql",
+    "db:migrate:local": "npx wrangler d1 execute sealed-heavens-db --local --file ./workers/schema.sql"
+  }
+}

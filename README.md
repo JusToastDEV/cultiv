@@ -23,6 +23,9 @@ Open `index.html` in a browser for static frontend work.
 
 For live-service testing, run the Worker stack instead of relying on offline-only behavior.
 
+All deploy and worker commands should now be run from the repo root.
+The root `wrangler.toml` is the deploy entrypoint that GitHub and local manual deploys should both use.
+
 ## Production Architecture
 
 Production currently deploys like this:
@@ -68,14 +71,22 @@ If Worker files changed but the asset staging config did not deploy with them, p
 
 ## Manual Fallback Deploy
 
-From `workers/`:
+From the repo root:
 
 ```powershell
 $env:PATH = "C:\Program Files\nodejs;$env:PATH"
-& "C:\Program Files\nodejs\npx.cmd" wrangler deploy
+& "C:\Program Files\nodejs\npm.cmd" run deploy:dry-run
+& "C:\Program Files\nodejs\npm.cmd" run deploy
 ```
 
 Use this when GitHub Actions has not caught up yet or when production needs an immediate fix.
+
+If you want to inspect the worker locally without deploying, use:
+
+```powershell
+$env:PATH = "C:\Program Files\nodejs;$env:PATH"
+& "C:\Program Files\nodejs\npm.cmd" run dev
+```
 
 ## Minimum Smoke Tests After Deploy
 
