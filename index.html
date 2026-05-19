@@ -165,40 +165,72 @@
            <span class="panel-meta" id="cult-realm-label">Mortal - Stage 1</span>
          </div>
 
-         <div class="card cult-progress-card">
-           <div class="cult-xp-row">
-             <span>Cultivation XP</span>
-             <span id="cult-xp-val">0 / 100</span>
+         <!-- Dantian Hub -->
+         <div class="cult-hub">
+           <div class="cult-dantian-wrap">
+             <div class="cult-dantian-ring" id="cult-dantian-ring">
+               <div class="cult-dantian-inner">
+                 <div class="cult-stage-glyph">☯</div>
+                 <div class="cult-realm-name-sm" id="cult-realm-short">Qi Condensation</div>
+                 <div class="cult-stage-name-sm" id="cult-stage-short">Early</div>
+               </div>
+             </div>
            </div>
-           <div class="xp-bar"><div class="xp-fill" id="cult-xp-fill" style="width:0%"></div></div>
+           <div class="cult-progress-column">
+             <div class="cult-xp-header">
+               <span class="cult-xp-label">Cultivation Progress</span>
+               <span id="cult-xp-val" class="cult-xp-val">0 / 100</span>
+             </div>
+             <div class="cult-xp-bar-outer">
+               <div class="cult-xp-fill" id="cult-xp-fill" style="width:0%"></div>
+             </div>
+             <div class="cult-substage-track" id="cult-substage-track">
+               <div class="cult-substage-dot" id="cult-dot-0"></div>
+               <div class="cult-substage-dot" id="cult-dot-1"></div>
+               <div class="cult-substage-dot" id="cult-dot-2"></div>
+             </div>
+             <div class="cult-substage-labels">
+               <span>Early</span><span>Mid</span><span>Late</span><span>Peak</span>
+             </div>
+           </div>
          </div>
 
-         <div class="panel-grid-3">
-           <div class="card action-card">
-             <h3>Meditate</h3>
-             <p class="card-desc">Refine your Qi and accumulate cultivation experience.</p>
+         <!-- Training Actions -->
+         <div class="cult-actions-grid">
+           <div class="cult-action-card" id="cult-card-meditate">
+             <div class="cult-action-icon">☯</div>
+             <h3 class="cult-action-title">Meditate</h3>
+             <p class="cult-action-desc">Still the mind. Qi gathers in silence and cultivation deepens.</p>
              <div class="cd-bar-wrap"><div class="cd-bar" id="cd-meditate"></div></div>
-             <button class="btn-primary btn-action" data-action="meditate" id="btn-meditate">Meditate</button>
+             <button class="btn-primary btn-action cult-action-btn" data-action="meditate" id="btn-meditate">Meditate</button>
            </div>
-           <div class="card action-card">
-             <h3>Train Body</h3>
-             <p class="card-desc">Forge your body through sustained tempering.</p>
+           <div class="cult-action-card" id="cult-card-trainBody">
+             <div class="cult-action-icon">⚔</div>
+             <h3 class="cult-action-title">Body Forge</h3>
+             <p class="cult-action-desc">Temper flesh, bone, and sinew through sustained refinement.</p>
              <div class="cd-bar-wrap"><div class="cd-bar" id="cd-trainBody"></div></div>
-             <button class="btn-primary btn-action" data-action="trainBody" id="btn-trainBody">Train Body</button>
+             <button class="btn-primary btn-action cult-action-btn" data-action="trainBody" id="btn-trainBody">Train Body</button>
            </div>
-           <div class="card action-card">
-             <h3>Train Soul</h3>
-             <p class="card-desc">Expand your spirit sense and sharpen your will.</p>
+           <div class="cult-action-card" id="cult-card-trainSoul">
+             <div class="cult-action-icon">◎</div>
+             <h3 class="cult-action-title">Soul Refinement</h3>
+             <p class="cult-action-desc">Expand spirit sense and sharpen the will against the heavens.</p>
              <div class="cd-bar-wrap"><div class="cd-bar" id="cd-trainSoul"></div></div>
-             <button class="btn-primary btn-action" data-action="trainSoul" id="btn-trainSoul">Train Soul</button>
+             <button class="btn-primary btn-action cult-action-btn" data-action="trainSoul" id="btn-trainSoul">Train Soul</button>
            </div>
          </div>
 
-         <div class="card mt-md">
-           <h3>Breakthrough</h3>
-           <p id="breakthrough-desc" class="card-desc">Gather enough cultivation XP to attempt your next breakthrough.</p>
-           <div id="breakthrough-check" class="breakthrough-check"></div>
-           <button class="btn-danger btn-action" data-action="breakthrough" id="btn-breakthrough">Attempt Breakthrough</button>
+         <!-- Breakthrough -->
+         <div class="cult-breakthrough" id="cult-breakthrough-section">
+           <div class="cult-breakthrough-inner">
+             <div class="cult-breakthrough-glyph">⚡</div>
+             <div class="cult-breakthrough-content">
+               <h3 class="cult-breakthrough-title">Attempt Breakthrough</h3>
+               <p id="breakthrough-desc" class="cult-breakthrough-desc">Gather enough cultivation XP to shatter your current stage ceiling.</p>
+               <div id="breakthrough-check" class="breakthrough-check"></div>
+             </div>
+             <button class="btn-danger btn-action cult-breakthrough-btn" data-action="breakthrough" id="btn-breakthrough">Break Through</button>
+           </div>
          </div>
 
          <div id="active-action-note" class="action-status mt-sm"></div>

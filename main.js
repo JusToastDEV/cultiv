@@ -5231,18 +5231,12 @@ function renderTechniquesPanel(state) {
         </div>`;
     } else {
       entry.style.opacity = "0.5";
-      const catalystLines = getTechniqueCatalystLines(tpl)
-        .map((entry) => {
-          const plan = buildCultivationMaterialPlan(tpl, entry);
-          return `<div class="tech-catalyst-line">* Recommended ${plan.label}: ${entry.effect} (${plan.successRate}% success · ${plan.effectPercent}% yield · ${formatBonusSummary(plan.bonuses || {})})</div>`;
-        })
-        .join("");
       entry.innerHTML = `
         <h4 style="color:var(--ink-2)">${tpl.label} <small style="font-size:0.75rem">(not learned)</small></h4>
         <div class="tech-meta"><span class="tech-grade">${tpl.grade || "Unknown"}</span>${tpl.pillar === "body" ? "Body" : "Soul"} Pillar · Realm req: ${tpl.realmReq}</div>
         <div class="tech-desc">${tpl.desc}</div>
         <div class="tech-drawback-list">${getTechniqueDrawbackLines(tpl).map((line) => `<div class="tech-drawback-line">- ${line}</div>`).join("") || '<div class="tech-drawback-line">- No listed drawbacks</div>'}</div>
-        <div class="tech-catalyst-list">${catalystLines || '<div class="tech-catalyst-line">* No compatible catalyst materials</div>'}</div>`;
+        <div class="tech-catalyst-list"><div class="tech-catalyst-line" style="color:var(--ink-2);font-style:italic">* Learn this technique to unlock catalyst bonuses</div></div>`;
     }
     cultPanel.appendChild(entry);
   });

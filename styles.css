@@ -1603,6 +1603,281 @@ button.btn-locked {
 .cd-bar { height:100%;width:0;background:linear-gradient(90deg,var(--lacquer),var(--lacquer-light));border-radius:2px;transition:width .5s linear; }
 .breakthrough-check { color:var(--ink-1);font-size:.84rem;margin:.4rem 0; }
 
+/* ── Cultivation Panel Redesign ──────────────────────────── */
+.cult-hub {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 1rem 0 .75rem;
+  border-bottom: 1px solid rgba(139,105,20,.15);
+  margin-bottom: .75rem;
+}
+.cult-dantian-wrap {
+  flex-shrink: 0;
+}
+.cult-dantian-ring {
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  border: 2px solid var(--bronze);
+  box-shadow: 0 0 18px rgba(139,105,20,.25), inset 0 0 20px rgba(0,0,0,.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: cult-dantian-pulse 5s ease-in-out infinite;
+  background: radial-gradient(circle at center, rgba(139,105,20,.12) 0%, transparent 72%);
+  position: relative;
+}
+.cult-dantian-ring::before {
+  content: '';
+  position: absolute;
+  width: 82%;
+  height: 82%;
+  border-radius: 50%;
+  border: 1px solid rgba(201,162,50,.2);
+}
+.cult-dantian-ring.is-active {
+  animation: cult-dantian-active 2.2s ease-in-out infinite;
+  border-color: var(--jade);
+  box-shadow: 0 0 26px rgba(58,125,96,.4), inset 0 0 20px rgba(0,0,0,.5);
+}
+@keyframes cult-dantian-pulse {
+  0%,100% { box-shadow: 0 0 18px rgba(139,105,20,.25), inset 0 0 20px rgba(0,0,0,.5); }
+  50%      { box-shadow: 0 0 30px rgba(139,105,20,.45), inset 0 0 20px rgba(0,0,0,.5); }
+}
+@keyframes cult-dantian-active {
+  0%,100% { box-shadow: 0 0 18px rgba(58,125,96,.4), inset 0 0 20px rgba(0,0,0,.5); transform: scale(1); }
+  50%      { box-shadow: 0 0 38px rgba(58,125,96,.7), inset 0 0 20px rgba(0,0,0,.5); transform: scale(1.04); }
+}
+.cult-dantian-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  z-index: 1;
+}
+.cult-stage-glyph {
+  font-size: 1.9rem;
+  color: var(--bronze-light);
+  line-height: 1;
+  filter: drop-shadow(0 0 6px rgba(201,162,50,.5));
+}
+.cult-realm-name-sm {
+  font-size: .6rem;
+  color: var(--ink-2);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  text-align: center;
+  line-height: 1.2;
+}
+.cult-stage-name-sm {
+  font-size: .78rem;
+  color: var(--bronze-light);
+  font-weight: 700;
+  letter-spacing: .03em;
+}
+.cult-progress-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: .45rem;
+}
+.cult-xp-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.cult-xp-label {
+  font-size: .75rem;
+  color: var(--ink-2);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.cult-xp-val {
+  font-size: .8rem;
+  color: var(--ink-1);
+  font-weight: 600;
+}
+.cult-xp-bar-outer {
+  height: 7px;
+  background: rgba(255,255,255,.06);
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,.5);
+  position: relative;
+}
+.cult-xp-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--bronze) 0%, var(--bronze-light) 100%);
+  border-radius: 4px;
+  transition: width 1.2s cubic-bezier(.4,0,.2,1);
+  position: relative;
+  overflow: hidden;
+}
+.cult-xp-fill::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(90deg, transparent 35%, rgba(255,255,255,.28) 50%, transparent 65%);
+  animation: xp-shimmer 3.5s ease-in-out infinite;
+}
+@keyframes xp-shimmer {
+  0%   { transform: translateX(-200%); }
+  100% { transform: translateX(400%); }
+}
+.cult-substage-track {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.cult-substage-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1px solid rgba(139,105,20,.5);
+  background: transparent;
+  transition: background .35s, box-shadow .35s;
+  flex-shrink: 0;
+}
+.cult-substage-dot.filled {
+  background: var(--bronze-light);
+  border-color: var(--bronze-light);
+  box-shadow: 0 0 7px rgba(201,162,50,.6);
+}
+.cult-substage-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: .67rem;
+  color: var(--ink-2);
+  letter-spacing: .04em;
+}
+
+/* ── Training Action Cards ── */
+.cult-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: .65rem;
+  margin-bottom: .75rem;
+}
+@media (max-width: 640px) {
+  .cult-actions-grid { grid-template-columns: 1fr; }
+}
+.cult-action-card {
+  background: var(--bg-1);
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: var(--radius);
+  padding: .9rem .75rem .75rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .45rem;
+  text-align: center;
+  transition: border-color .18s, box-shadow .18s;
+  position: relative;
+  overflow: hidden;
+}
+.cult-action-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(201,162,50,.3), transparent);
+}
+.cult-action-card:hover {
+  border-color: rgba(201,162,50,.3);
+  box-shadow: 0 3px 14px rgba(0,0,0,.35);
+}
+.cult-action-card.is-active {
+  border-color: var(--jade);
+  background: linear-gradient(180deg, rgba(58,125,96,.09) 0%, var(--bg-1) 100%);
+}
+#cult-card-meditate .cult-action-icon { color: var(--jade-light); }
+#cult-card-trainBody .cult-action-icon { color: var(--lacquer-light); }
+#cult-card-trainSoul .cult-action-icon { color: var(--bronze-light); }
+.cult-action-icon {
+  font-size: 1.8rem;
+  line-height: 1;
+  transition: transform .3s, filter .3s;
+}
+.cult-action-card.is-active .cult-action-icon {
+  animation: icon-meditate 3s ease-in-out infinite;
+}
+@keyframes icon-meditate {
+  0%,100% { opacity: 1; transform: scale(1); filter: drop-shadow(0 0 4px currentColor); }
+  50%      { opacity: .65; transform: scale(.92); filter: drop-shadow(0 0 2px currentColor); }
+}
+.cult-action-title {
+  font-size: .86rem;
+  font-weight: 700;
+  color: var(--ink-0);
+  margin: 0;
+  letter-spacing: .02em;
+}
+.cult-action-desc {
+  font-size: .74rem;
+  color: var(--ink-2);
+  margin: 0;
+  flex: 1;
+  font-style: italic;
+  line-height: 1.45;
+}
+.cult-action-btn {
+  width: 100%;
+  font-size: .8rem;
+}
+
+/* ── Breakthrough ── */
+.cult-breakthrough {
+  background: linear-gradient(135deg, rgba(125,26,26,.14) 0%, rgba(10,11,13,0) 100%);
+  border: 1px solid rgba(125,26,26,.55);
+  border-radius: var(--radius);
+  padding: .9rem 1rem;
+  position: relative;
+  overflow: hidden;
+  margin-bottom: .5rem;
+}
+.cult-breakthrough::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(184,48,48,.7), transparent);
+}
+.cult-breakthrough-inner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.cult-breakthrough-glyph {
+  font-size: 2.4rem;
+  color: var(--lacquer-light);
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 8px rgba(184,48,48,.5));
+}
+.cult-breakthrough-content { flex: 1; }
+.cult-breakthrough-title {
+  font-size: .9rem;
+  font-weight: 700;
+  color: var(--ink-0);
+  margin: 0 0 3px;
+  letter-spacing: .02em;
+}
+.cult-breakthrough-desc {
+  font-size: .75rem;
+  color: var(--ink-2);
+  margin: 0;
+  font-style: italic;
+}
+.cult-breakthrough-btn { flex-shrink: 0; }
+.cult-breakthrough-btn.ready-pulse {
+  animation: bt-pulse 1.6s ease-in-out infinite;
+}
+@keyframes bt-pulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(184,48,48,.5); }
+  50%      { box-shadow: 0 0 0 8px rgba(184,48,48,.0); }
+}
+
+
 .explore-layout { display:grid;grid-template-columns:280px 1fr;gap:1rem; }
 .zone-list { display:flex;flex-direction:column;gap:.5rem;max-height:60vh;overflow-y:auto; }
 .zone-card { border:1px solid var(--border);border-radius:8px;padding:.7rem .9rem;cursor:pointer;transition:border-color .12s,background .12s; }
