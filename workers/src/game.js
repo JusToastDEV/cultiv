@@ -516,7 +516,7 @@ function buildInitialState(name, origin, path) {
     battleQi: 30,
     battleQiMax: 30,
     silver: 100,
-    longevity: 80,
+    longevity: 18,
     longevityMax: 80,
     cultivationXp: bonuses.soulXp,
     bodyXp: bonuses.bodyXp,

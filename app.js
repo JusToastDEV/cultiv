@@ -541,7 +541,7 @@ function activatePanel(panelId) {
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === `panel-${panelId}`));
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('hidden', p.id !== `panel-${panelId}`));
   // Lazy-load panel data
-  if (panelId === 'explore' && _character) loadZones();
+  if (panelId === 'explore' && _character) { renderAtlasMap(); loadZones(); }
   if (panelId === 'inventory') loadInventory();
   if (panelId === 'admin') loadAdminFeatures();
   if (panelId === 'account') loadAccountInfo();
@@ -633,6 +633,20 @@ function renderCultivatePanel() {
   if (cultRealm) cultRealm.textContent = `${realmName} · ${stageName}`;
   if (profileRealm) profileRealm.textContent = `${realmName} · ${stageName}`;
   if (profileName) profileName.textContent = c.name;
+
+  // Profile panel stats
+  const profileRealmStat  = document.getElementById('profile-realm');
+  const profileLongevity  = document.getElementById('profile-longevity');
+  const profileTurn       = document.getElementById('profile-turn');
+  const profileWallet     = document.getElementById('profile-wallet');
+  const profileBody       = document.getElementById('profile-body');
+  const profileSoul       = document.getElementById('profile-soul');
+  if (profileRealmStat) profileRealmStat.textContent = `${realmName} · ${stageName}`;
+  if (profileLongevity)  profileLongevity.textContent = `${s.longevity ?? 18} / ${s.longevityMax ?? 80} yrs`;
+  if (profileTurn)       profileTurn.textContent = s.cultivationXp ?? 0;
+  if (profileWallet)     profileWallet.textContent = `${s.silver ?? 0} silver`;
+  if (profileBody)       profileBody.textContent = s.bodyXp ?? 0;
+  if (profileSoul)       profileSoul.textContent = s.soulXp ?? 0;
 
   // XP bar
   const xpThreshold = 100 + c.realm_index * 50 + c.stage_index * 20;
@@ -864,8 +878,267 @@ function appendToLog(text) {
 }
 
 // ── Zone Explore panel ─────────────────────────────────────────
+
+// Static world data for atlas rendering (mirrors server GAME_CONSTANTS)
+const WORLD_DATA = {
+  regions: [
+    { id: 'ashen-frontier',   name: 'Ashen Frontier',    world: 'Ashen World',    danger: 'Low',         resources: 'Herbs, low-tier ores',        neighbors: ['jade-delta','iron-wilds'] },
+    { id: 'jade-delta',       name: 'Jade Delta',         world: 'Verdant World',  danger: 'Low-Mid',     resources: 'Spirit herbs, alchemy reagents',neighbors: ['ashen-frontier','void-rift'] },
+    { id: 'iron-wilds',       name: 'Iron Wilds',         world: 'Ashen World',    danger: 'Mid',         resources: 'Beast cores, blood jade',       neighbors: ['ashen-frontier','void-rift'] },
+    { id: 'void-rift',        name: 'Void Rift March',    world: 'Mirror World',   danger: 'High',        resources: 'Array ore, rare relic fragments',neighbors: ['jade-delta','iron-wilds','celestial-plateau'] },
+    { id: 'celestial-plateau',name: 'Celestial Plateau',  world: 'Upper Heaven',   danger: 'Extreme',     resources: 'Void lotuses, saint bone, star-metal', neighbors: ['void-rift','sovereign-wastes'] },
+    { id: 'sovereign-wastes', name: 'Sovereign Wastes',   world: 'Ancient Heaven', danger: 'Cataclysmic', resources: 'Dao crystals, immortal dew, sovereign relics', neighbors: ['celestial-plateau'] }
+  ],
+  cities: [
+    { id:'ember',       name:'Ember Court',         regionId:'ashen-frontier' },
+    { id:'cinder',      name:'Cinder Bastion',       regionId:'ashen-frontier' },
+    { id:'ashgate',     name:'Ashgate Borough',      regionId:'ashen-frontier' },
+    { id:'char-haven',  name:'Char Haven',           regionId:'ashen-frontier' },
+    { id:'sable-forge', name:'Sable Forge',          regionId:'ashen-frontier' },
+    { id:'grim-terrace',name:'Grim Terrace',         regionId:'ashen-frontier' },
+    { id:'jade',        name:'Jade Harbor',          regionId:'jade-delta' },
+    { id:'lotus',       name:'Lotus Archive',        regionId:'jade-delta' },
+    { id:'rain-wharf',  name:'Rainwharf Quay',       regionId:'jade-delta' },
+    { id:'bamboo-rise', name:'Bamboo Rise',          regionId:'jade-delta' },
+    { id:'mist-pier',   name:'Mist Pier',            regionId:'jade-delta' },
+    { id:'green-vault', name:'Green Vault District', regionId:'jade-delta' },
+    { id:'iron',        name:'Iron Howl Keep',       regionId:'iron-wilds' },
+    { id:'fang-cross',  name:'Fang Cross',           regionId:'iron-wilds' },
+    { id:'red-cliff',   name:'Red Cliff Yard',       regionId:'iron-wilds' },
+    { id:'bone-spear',  name:'Bone Spear Ward',      regionId:'iron-wilds' },
+    { id:'steel-marsh', name:'Steel Marsh',          regionId:'iron-wilds' },
+    { id:'war-drum',    name:'War Drum City',        regionId:'iron-wilds' },
+    { id:'void',        name:'Void Lantern Capital', regionId:'void-rift' },
+    { id:'night-shard', name:'Night Shard Port',     regionId:'void-rift' },
+    { id:'mirror-step', name:'Mirrorstep Enclave',   regionId:'void-rift' },
+    { id:'riftwatch',   name:'Riftwatch Bastion',    regionId:'void-rift' },
+    { id:'hollow-sun',  name:'Hollow Sun Bastille',  regionId:'void-rift' },
+    { id:'echo-prism',  name:'Echo Prism Court',     regionId:'void-rift' },
+    { id:'starfall',    name:'Starfall Terrace',     regionId:'celestial-plateau' },
+    { id:'saint-vigil', name:'Saint Vigil City',     regionId:'celestial-plateau' },
+    { id:'auric-steps', name:'Auric Steps',          regionId:'celestial-plateau' },
+    { id:'dao-furnace', name:'Dao Furnace Capital',  regionId:'sovereign-wastes' },
+    { id:'crown-void',  name:'Crown Void Citadel',   regionId:'sovereign-wastes' },
+    { id:'ashen-throne',name:'Ashen Throne Gate',    regionId:'sovereign-wastes' }
+  ],
+  areas: [
+    { id:'cinder-steppe',        name:'Cinder Steppe',          short:'Steppe',    regionId:'ashen-frontier',    danger:1 },
+    { id:'burnt-shrines',        name:'Burnt Shrines',           short:'Shrines',   regionId:'ashen-frontier',    danger:2 },
+    { id:'smoke-pits',           name:'Smoke Pits',              short:'Pits',      regionId:'ashen-frontier',    danger:2 },
+    { id:'jade-marsh',           name:'Jade Marsh',              short:'Marsh',     regionId:'jade-delta',        danger:1 },
+    { id:'lotus-fissure',        name:'Lotus Fissure',           short:'Fissure',   regionId:'jade-delta',        danger:2 },
+    { id:'bamboo-veil',          name:'Bamboo Veil',             short:'Veil',      regionId:'jade-delta',        danger:1 },
+    { id:'red-fang-range',       name:'Red Fang Range',          short:'Fang',      regionId:'iron-wilds',        danger:2 },
+    { id:'bone-hollows',         name:'Bone Hollows',            short:'Hollows',   regionId:'iron-wilds',        danger:3 },
+    { id:'war-scar-vale',        name:'War Scar Vale',           short:'Vale',      regionId:'iron-wilds',        danger:3 },
+    { id:'fracture-coast',       name:'Fracture Coast',          short:'Coast',     regionId:'void-rift',         danger:3 },
+    { id:'prism-chasm',          name:'Prism Chasm',             short:'Chasm',     regionId:'void-rift',         danger:4 },
+    { id:'hushed-mirror',        name:'Hushed Mirror Expanse',   short:'Mirror',    regionId:'void-rift',         danger:4 },
+    { id:'star-shear-rim',       name:'Star Shear Rim',          short:'Shear',     regionId:'celestial-plateau', danger:5 },
+    { id:'lotus-of-absence',     name:'Lotus of Absence',        short:'Absence',   regionId:'celestial-plateau', danger:5 },
+    { id:'seraph-spine',         name:'Seraph Spine',            short:'Spine',     regionId:'celestial-plateau', danger:6 },
+    { id:'dao-bone-desert',      name:'Dao Bone Desert',         short:'Dao Bone',  regionId:'sovereign-wastes',  danger:6 },
+    { id:'immortal-furnace-sea', name:'Immortal Furnace Sea',    short:'Furnace',   regionId:'sovereign-wastes',  danger:7 },
+    { id:'thronefall-necropolis',name:'Thronefall Necropolis',   short:'Necropolis',regionId:'sovereign-wastes',  danger:7 },
+    { id:'myriad-spirit-mausoleum',name:'Myriad Spirit Mausoleum',short:'Mausoleum',regionId:'sovereign-wastes', danger:8 }
+  ]
+};
+
+const REGION_POSITIONS = {
+  'ashen-frontier':    { x: 300, y: 420 },
+  'jade-delta':        { x: 820, y: 310 },
+  'iron-wilds':        { x: 760, y: 690 },
+  'void-rift':         { x: 1200, y: 500 },
+  'celestial-plateau': { x: 1360, y: 220 },
+  'sovereign-wastes':  { x: 1450, y: 760 }
+};
+
+function atlasRegionPos(regionId) {
+  return REGION_POSITIONS[regionId] || { x: 540, y: 420 };
+}
+
+function atlasCityPos(city) {
+  const regional = WORLD_DATA.cities.filter(c => c.regionId === city.regionId);
+  const index = Math.max(0, regional.findIndex(c => c.id === city.id));
+  const count = Math.max(1, regional.length);
+  const anchor = atlasRegionPos(city.regionId);
+  const angle = (Math.PI * 2 * index) / count;
+  const ring = 88 + (index % 3) * 30;
+  return { x: anchor.x + Math.cos(angle) * ring, y: anchor.y + Math.sin(angle) * ring };
+}
+
+function atlasAreaPos(area) {
+  const regional = WORLD_DATA.areas.filter(a => a.regionId === area.regionId);
+  const index = Math.max(0, regional.findIndex(a => a.id === area.id));
+  const count = Math.max(1, regional.length);
+  const anchor = atlasRegionPos(area.regionId);
+  const angle = (Math.PI * 2 * index) / count + Math.PI / 6;
+  const ring = 145 + (index % 3) * 24;
+  return { x: anchor.x + Math.cos(angle) * ring, y: anchor.y + Math.sin(angle) * ring };
+}
+
+let _atlasSelection = null;
+
+function renderAtlasMap() {
+  const canvas = document.getElementById('atlas-canvas');
+  const info   = document.getElementById('atlas-info');
+  if (!canvas) return;
+  canvas.innerHTML = '';
+
+  const currentRegionId = _gameState?.regionId ?? 'ashen-frontier';
+  const currentCityId   = _gameState?.cityId   ?? 'ashgate';
+
+  const seenLines = new Set();
+  const drawLine = (key, from, to, cls = '') => {
+    if (seenLines.has(key)) return;
+    seenLines.add(key);
+    const dx = to.x - from.x, dy = to.y - from.y;
+    const dist  = Math.sqrt(dx * dx + dy * dy);
+    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+    const line  = document.createElement('div');
+    line.className = `atlas-line ${cls}`.trim();
+    line.style.left      = `${from.x}px`;
+    line.style.top       = `${from.y}px`;
+    line.style.width     = `${dist}px`;
+    line.style.transform = `rotate(${angle}deg)`;
+    canvas.appendChild(line);
+  };
+
+  // Region → region connections
+  WORLD_DATA.regions.forEach(region => {
+    const from = atlasRegionPos(region.id);
+    region.neighbors.forEach(nId => {
+      const key = [region.id, nId].sort().join('|');
+      drawLine(key, from, atlasRegionPos(nId));
+    });
+  });
+
+  // Region → city spokes
+  WORLD_DATA.cities.forEach(city => {
+    drawLine(`rc:${city.id}`, atlasRegionPos(city.regionId), atlasCityPos(city), 'subline');
+  });
+
+  // Region → area spokes (current region only to reduce clutter)
+  WORLD_DATA.areas
+    .filter(a => a.regionId === currentRegionId)
+    .forEach(area => {
+      const cities = WORLD_DATA.cities.filter(c => c.regionId === area.regionId);
+      const aPos = atlasAreaPos(area);
+      const closest = cities.reduce((best, c) => {
+        if (!best) return c;
+        const bp = atlasCityPos(best), cp = atlasCityPos(c);
+        const bd = (bp.x - aPos.x) ** 2 + (bp.y - aPos.y) ** 2;
+        const cd = (cp.x - aPos.x) ** 2 + (cp.y - aPos.y) ** 2;
+        return cd < bd ? c : best;
+      }, cities[0]);
+      if (closest) drawLine(`ca:${area.id}`, atlasCityPos(closest), aPos, 'subline faint');
+    });
+
+  // Region nodes
+  WORLD_DATA.regions.forEach(region => {
+    const pos  = atlasRegionPos(region.id);
+    const isCurrent  = region.id === currentRegionId;
+    const isSelected = _atlasSelection?.type === 'region' && _atlasSelection.id === region.id;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `atlas-node region${isCurrent ? ' current' : ''}${isSelected ? ' selected' : ''}`;
+    btn.style.left = `${pos.x - 18}px`;
+    btn.style.top  = `${pos.y - 18}px`;
+    btn.innerHTML  = `<span class="node-icon">RG</span><span>${region.name}</span>`;
+    btn.addEventListener('click', () => { _atlasSelection = { type:'region', id:region.id }; renderAtlasMap(); });
+    canvas.appendChild(btn);
+  });
+
+  // City nodes
+  WORLD_DATA.cities.forEach(city => {
+    const pos  = atlasCityPos(city);
+    const isCurrent  = city.id === currentCityId;
+    const isSelected = _atlasSelection?.type === 'city' && _atlasSelection.id === city.id;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `atlas-node city${isCurrent ? ' current' : ''}${isSelected ? ' selected' : ''}`;
+    btn.style.left = `${pos.x}px`;
+    btn.style.top  = `${pos.y}px`;
+    btn.innerHTML  = `<span class="node-icon">CT</span><span>${city.name}</span>`;
+    btn.addEventListener('click', () => { _atlasSelection = { type:'city', id:city.id }; renderAtlasMap(); });
+    canvas.appendChild(btn);
+  });
+
+  // Area nodes (current region only)
+  WORLD_DATA.areas
+    .filter(a => a.regionId === currentRegionId)
+    .forEach(area => {
+      const pos  = atlasAreaPos(area);
+      const isSelected = _atlasSelection?.type === 'area' && _atlasSelection.id === area.id;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = `atlas-node area${isSelected ? ' selected' : ''}`;
+      btn.style.left = `${pos.x}px`;
+      btn.style.top  = `${pos.y}px`;
+      btn.innerHTML  = `<span class="node-icon">AR</span><span class="node-label">${area.short || area.name}</span>`;
+      btn.addEventListener('click', () => { _atlasSelection = { type:'area', id:area.id }; renderAtlasMap(); });
+      canvas.appendChild(btn);
+    });
+
+  // Info panel
+  if (!info) return;
+  const sel = _atlasSelection;
+  if (!sel) { info.textContent = 'Select a region, city, or area on the map.'; return; }
+
+  if (sel.type === 'region') {
+    const r = WORLD_DATA.regions.find(x => x.id === sel.id);
+    if (!r) return;
+    info.innerHTML = `<strong>${escHtml(r.name)}</strong> · World: ${escHtml(r.world)} · Danger: ${escHtml(r.danger)}<br><span class="text-muted">Resources: ${escHtml(r.resources)}</span>`;
+    return;
+  }
+  if (sel.type === 'city') {
+    const c = WORLD_DATA.cities.find(x => x.id === sel.id);
+    if (!c) return;
+    const inCurrentRegion = c.regionId === currentRegionId;
+    info.innerHTML = `<strong>${escHtml(c.name)}</strong>${inCurrentRegion ? ' <span class="text-good">(accessible)</span>' : ' <span class="text-muted">(different region)</span>'}`;
+    return;
+  }
+  if (sel.type === 'area') {
+    const a = WORLD_DATA.areas.find(x => x.id === sel.id);
+    if (!a) return;
+    const dangerLabel = a.danger >= 7 ? 'Extreme' : a.danger >= 5 ? 'High' : a.danger >= 3 ? 'Mid' : 'Low';
+    info.innerHTML = `<strong>${escHtml(a.name)}</strong> · Danger ${a.danger} (${dangerLabel}) · Region: ${escHtml(WORLD_DATA.regions.find(r => r.id === a.regionId)?.name ?? a.regionId)}`;
+  }
+}
+
 function setupExplorePanel() {
-  // Node exploration happens dynamically via loadZones → renderZoneDetail → click
+  // Atlas drag-to-pan
+  const viewport = document.getElementById('atlas-viewport');
+  const canvas   = document.getElementById('atlas-canvas');
+  if (!viewport || !canvas) return;
+
+  let dragging = false, startX = 0, startY = 0, tx = 0, ty = 0, cx = 0, cy = 0;
+
+  viewport.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    dragging = true; startX = e.clientX; startY = e.clientY; cx = tx; cy = ty;
+    viewport.classList.add('dragging');
+  });
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    tx = cx + (e.clientX - startX);
+    ty = cy + (e.clientY - startY);
+    canvas.style.transform = `translate3d(${tx}px,${ty}px,0)`;
+  });
+  window.addEventListener('mouseup', () => { dragging = false; viewport.classList.remove('dragging'); });
+
+  // Touch support
+  viewport.addEventListener('touchstart', e => {
+    if (e.touches.length !== 1) return;
+    dragging = true; startX = e.touches[0].clientX; startY = e.touches[0].clientY; cx = tx; cy = ty;
+  }, { passive: true });
+  viewport.addEventListener('touchmove', e => {
+    if (!dragging || e.touches.length !== 1) return;
+    tx = cx + (e.touches[0].clientX - startX);
+    ty = cy + (e.touches[0].clientY - startY);
+    canvas.style.transform = `translate3d(${tx}px,${ty}px,0)`;
+  }, { passive: true });
+  viewport.addEventListener('touchend', () => { dragging = false; });
 }
 
 async function loadZones() {

@@ -207,13 +207,19 @@
 
        <section id="panel-explore" class="panel hidden">
          <div class="panel-header">
-           <h2>Zone Exploration</h2>
+           <h2>World Atlas</h2>
            <span class="panel-meta" id="explore-realm-label">Your realm determines accessible zones</span>
          </div>
-         <div class="explore-layout">
+
+         <div class="atlas-viewport" id="atlas-viewport">
+           <div class="atlas-canvas" id="atlas-canvas"></div>
+         </div>
+         <div class="atlas-info" id="atlas-info">Select a region, city, or area on the map.</div>
+
+         <div class="explore-layout mt-md">
            <div class="zone-list-col">
              <div class="card">
-               <h3>Accessible Zones</h3>
+               <h3>Zones</h3>
                <div id="zone-list" class="zone-list"></div>
              </div>
            </div>

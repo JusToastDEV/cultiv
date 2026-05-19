@@ -1573,6 +1573,7 @@ button.btn-locked {
 .mt-sm { margin-top:.5rem; }
 .mt-md { margin-top:1rem; }
 .text-muted { color:var(--ink-2);font-size:.84rem; }
+.text-good  { color:var(--jade-light);font-size:.84rem; }
 .panel-grid-2 { display:grid;grid-template-columns:1fr 1fr;gap:1rem; }
 .panel-grid-3 { display:grid;grid-template-columns:repeat(3,1fr);gap:1rem; }
 .profile-stat-list { display:grid;grid-template-columns:auto 1fr;gap:.25rem .75rem;margin:0;font-size:.85rem; }
