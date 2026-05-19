@@ -2,59 +2,58 @@
  * Shared utilities for all Workers handlers
  */
 
+const LOCAL_ORIGIN_PATTERN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i;
+
 export function generateUUID() {
   // Use crypto.randomUUID() — available in Workers runtime
   return crypto.randomUUID();
 }
 
 export function corsHeaders(request) {
-  const origin = request?.headers?.get('Origin') ?? '*';
-  // In production, restrict to your actual Pages domain
-  // e.g. 'https://sealed-heavens.pages.dev'
-  return {
-    'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Credentials': 'true',
+  const origin = request?.headers?.get('Origin') ?? null;
+  const requestOrigin = request ? new URL(request.url).origin : null;
+  const allowOrigin = origin && (origin === requestOrigin || LOCAL_ORIGIN_PATTERN.test(origin))
+    ? origin
+    : requestOrigin;
 
-  const LOCAL_ORIGIN_PATTERN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i;
+  return {
+    ...(allowOrigin ? { 'Access-Control-Allow-Origin': allowOrigin } : {}),
+    'Access-Control-Allow-Credentials': 'true',
     'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Cookie'
+    'Access-Control-Allow-Headers': 'Content-Type, Cookie, X-Character-Id',
+    'Vary': 'Origin'
   };
+}
+
+export function buildSessionCookie(request, value, maxAgeSeconds) {
+  const url = new URL(request.url);
+  const isLocal = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+  const parts = [
+    `sh_session=${value}`,
+    'HttpOnly',
+    'SameSite=Strict',
+    `Max-Age=${maxAgeSeconds}`,
+    'Path=/'
+  ];
+
+  if (!isLocal && url.protocol === 'https:') {
+    parts.push('Secure');
+  }
+
+  return parts.join('; ');
 }
 
 export function json(data, status = 200, request = null) {
   return new Response(JSON.stringify(data), {
-    const origin = request?.headers?.get('Origin') ?? null;
-    const requestOrigin = request ? new URL(request.url).origin : null;
-    const allowOrigin = origin && (origin === requestOrigin || LOCAL_ORIGIN_PATTERN.test(origin))
-      ? origin
-      : requestOrigin;
-
-    return {
-      ...(allowOrigin ? { 'Access-Control-Allow-Origin': allowOrigin } : {}),
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+      ...corsHeaders(request)
     }
   });
-      'Access-Control-Allow-Headers': 'Content-Type, Cookie, X-Character-Id',
-      'Vary': 'Origin'
+}
 
 /**
-
-  export function buildSessionCookie(request, value, maxAgeSeconds) {
-    const url = new URL(request.url);
-    const isLocal = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
-    const parts = [
-      `sh_session=${value}`,
-      'HttpOnly',
-      'SameSite=Strict',
-      `Max-Age=${maxAgeSeconds}`,
-      'Path=/'
-    ];
-
-    if (!isLocal && url.protocol === 'https:') {
-      parts.push('Secure');
-    }
-
-    return parts.join('; ');
-  }
  * Reads the sh_session cookie, validates it against KV,
  * and returns the full account row or null.
  */
@@ -125,8 +124,6 @@ export async function getCooldownRemaining(env, characterId, actionKey) {
   if (!data) return 0;
   const remaining = data.ready_at - Date.now();
   return remaining > 0 ? remaining : 0;
-
-  const LOCAL_ORIGIN_PATTERN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i;
 }
 
 /**
@@ -134,45 +131,27 @@ export async function getCooldownRemaining(env, characterId, actionKey) {
  * durationMs: how long the cooldown lasts
  */
 export async function setCooldown(env, characterId, actionKey, durationMs) {
-    const origin = request?.headers?.get('Origin') ?? null;
-    const requestOrigin = request ? new URL(request.url).origin : null;
-    const allowOrigin = origin && (origin === requestOrigin || LOCAL_ORIGIN_PATTERN.test(origin))
-      ? origin
-      : requestOrigin;
+  const key = `cd:${characterId}:${actionKey}`;
+  const readyAt = Date.now() + durationMs;
+  await env.COOLDOWNS.put(key, JSON.stringify({ ready_at: readyAt }), {
+    expirationTtl: Math.ceil(durationMs / 1000) + 60
+  });
+}
 
-    return {
-      ...(allowOrigin ? { 'Access-Control-Allow-Origin': allowOrigin } : {}),
-      'Access-Control-Allow-Credentials': 'true',
-      'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Cookie, X-Character-Id',
-      'Vary': 'Origin'
-    };
-  }
-
-  export function buildSessionCookie(request, value, maxAgeSeconds) {
-    const url = new URL(request.url);
-    const isLocal = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
-    const parts = [
-      `sh_session=${value}`,
-      'HttpOnly',
-      'SameSite=Strict',
-      `Max-Age=${maxAgeSeconds}`,
-      'Path=/'
-    ];
-
-    if (!isLocal && url.protocol === 'https:') {
-      parts.push('Secure');
-    }
-
-    return parts.join('; ');
-  }
-
-  export function json(data, status = 200, request = null) {
-    return new Response(JSON.stringify(data), {
-      status,
-      headers: {
-        'Content-Type': 'application/json',
-        ...corsHeaders(request)
-      }
-    });
-  }
+/**
+ * Non-blocking audit log insert.
+ */
+export async function auditLog(env, { accountId, characterId, adminId, action, data, ip }) {
+  env.DB.prepare(
+    `INSERT INTO audit_log (account_id, character_id, admin_id, action, data_json, ip_address, created_at)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`
+  ).bind(
+    accountId ?? null,
+    characterId ?? null,
+    adminId ?? null,
+    action,
+    JSON.stringify(data ?? {}),
+    ip ?? 'unknown',
+    Date.now()
+  ).run().catch(err => console.error('audit log error:', err));
+}
