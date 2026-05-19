@@ -1,6 +1,5 @@
 /**
  * Sealed Heavens API — Main Router
- * Cloudflare Workers entry point.
  *
  * Routes:
  *   POST /api/auth/register
@@ -12,12 +11,18 @@
  *   DELETE /api/characters/:slot
  *   GET  /api/game/state
  *   POST /api/game/action
+ *   GET  /api/zones
+ *   GET  /api/zones/:id
+ *   GET  /api/inventory
+ *   GET  /api/afk
  *   GET  /api/world/events
+ *   GET  /api/world/history
+ *   POST /api/world/events/:id/participate
  *   GET  /api/admin/*  (admin_level >= 1 required)
  */
 
 import { handleAuth } from './auth.js';
-import { handleCharacters, handleGameState, handleGameAction } from './game.js';
+import { handleCharacters, handleGameState, handleGameAction, handleZones, handleInventory, handleAfk } from './game.js';
 import { handleWorldEvents } from './world.js';
 import { handleAdmin } from './admin.js';
 import { getSessionAccount, corsHeaders } from './utils.js';
@@ -59,6 +64,21 @@ export default {
       }
       if (path === '/api/game/action') {
         return await handleGameAction(request, env, account);
+      }
+
+      // ── Zone exploration ────────────────────────────────────
+      if (path.startsWith('/api/zones')) {
+        return await handleZones(request, env, account, path);
+      }
+
+      // ── Inventory ───────────────────────────────────────────
+      if (path.startsWith('/api/inventory')) {
+        return await handleInventory(request, env, account, path);
+      }
+
+      // ── AFK status ──────────────────────────────────────────
+      if (path.startsWith('/api/afk')) {
+        return await handleAfk(request, env, account, path);
       }
 
       // ── World events ────────────────────────────────────────

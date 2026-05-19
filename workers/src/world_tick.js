@@ -33,12 +33,13 @@ async function tickNPCs(env) {
 
     await env.DB.prepare(
       `UPDATE npc_state
-       SET realm_index = ?1, stage_index = ?2, ambition_stage = ?3, last_tick = ?4
-       WHERE npc_id = ?5`
+       SET realm_index = ?1, stage_index = ?2, ambition_stage = ?3, memory_json = ?4, last_tick = ?5
+       WHERE npc_id = ?6`
     ).bind(
       updated.realm_index,
       updated.stage_index,
       updated.ambition_stage,
+      updated.memory_json ?? npc.memory_json,
       Date.now(),
       npc.npc_id
     ).run();
@@ -50,36 +51,70 @@ async function tickNPCs(env) {
 }
 
 function advanceNPC(npc) {
-  // NPCs advance by a tiny fraction per tick
-  // Rate varies by template type (defined in NPC template data)
-  const advanceRate = getNPCAdvanceRate(npc.template_id);
+  // Cultivation takes REAL time. Ticks fire every 6h (4/day, ~120/month).
+  // Base rate is per-stage. Higher realms get an additional slowdown multiplier
+  // so early stages feel active but endgame is truly long-term.
+  //
+  // Target pacing (for rivals — the fastest-advancing NPCs):
+  //   Qi Condensation (0): ~3 weeks per stage
+  //   Foundation (1):      ~5 weeks per stage
+  //   Core Formation (2):  ~8 weeks per stage
+  //   Nascent Soul (3):    ~4 months per stage
+  //   Soul Formation (4):  ~8 months per stage
+  //   Void Refinement (5): ~18 months per stage
+  //   Dao Sovereign (8):   effectively frozen
+  //
+  // NPC cultivation uses an ACCUMULATOR stored in memory_json.cultivationPts
+  // Each tick adds a small float. When it hits 1.0, stage advances and resets.
+  // This avoids pure RNG bursts and gives smooth, predictable world pacing.
 
   let { realm_index, stage_index } = npc;
-  const MAX_REALM = 9; // Dao Sovereign
+  const MAX_REALM = 9;
   const STAGES_PER_REALM = 3;
+  if (realm_index >= MAX_REALM && stage_index >= STAGES_PER_REALM - 1) {
+    return { ...npc }; // already at cap
+  }
 
-  // Accumulate fractional progress (stored in a field we'll add later)
-  // For now: small random chance of advancement per tick
-  const roll = Math.random();
-  if (roll < advanceRate && !(realm_index >= MAX_REALM && stage_index >= STAGES_PER_REALM - 1)) {
+  // Parse memory_json for accumulator
+  let memory = {};
+  try { memory = JSON.parse(npc.memory_json ?? '{}'); } catch {}
+  let pts = memory.cultivationPts ?? 0;
+
+  // Points earned per tick — base rate × realm penalty
+  const baseRate = getNPCBaseRate(npc.template_id);
+  const realmPenalty = Math.pow(0.55, realm_index); // each realm ~45% slower than previous
+  const gained = baseRate * realmPenalty;
+  pts += gained;
+
+  let advanced = false;
+  if (pts >= 1.0) {
+    pts -= 1.0;
     stage_index++;
     if (stage_index >= STAGES_PER_REALM) {
       stage_index = 0;
       realm_index = Math.min(MAX_REALM, realm_index + 1);
     }
+    advanced = true;
   }
 
-  return { ...npc, realm_index, stage_index };
+  memory.cultivationPts = pts;
+  return {
+    ...npc,
+    realm_index,
+    stage_index,
+    memory_json: JSON.stringify(memory),
+    _advanced: advanced
+  };
 }
 
-function getNPCAdvanceRate(templateId) {
-  // World Figures advance slower (they're already powerful)
-  // Rivals advance at a moderate clip
-  if (templateId.startsWith('world-figure')) return 0.02;   // ~2% chance per tick
-  if (templateId.startsWith('rival'))        return 0.08;   // ~8% chance per tick
-  if (templateId.startsWith('city-elder'))   return 0.04;   // ~4% chance per tick
-  if (templateId.startsWith('sect-master'))  return 0.03;
-  return 0.05;
+function getNPCBaseRate(templateId) {
+  // Base pts per tick at realm 0. Higher realms apply realmPenalty on top.
+  // ~3 weeks per stage at realm 0 = 84 ticks → rate = 1/84 ≈ 0.012
+  if (templateId.startsWith('rival'))        return 0.012;  // fastest — ~3 weeks/stage at realm 0
+  if (templateId.startsWith('city-elder'))   return 0.006;  // ~6 weeks/stage
+  if (templateId.startsWith('sect-master'))  return 0.004;  // ~10 weeks/stage
+  if (templateId.startsWith('world-figure')) return 0.001;  // essentially static, story-driven only
+  return 0.008; // generic NPCs ~5 weeks/stage
 }
 
 function checkNPCAmbition(npc) {
