@@ -61,11 +61,13 @@ let _selectedWorldTile = null;
 let _selectedTileSite = null;
 let _travelRoute = null;
 let _lastTileEntry = null;
-let _localViewFocused = false;
-let _localPlayerX = null;        // Player position within local mini-map (0-4 for 5x5 grid)
+let _viewMode = 'world';         // 'world' or 'local'
+let _localViewTile = null;       // {x, y, regionId} - which world tile's local map we're viewing
+let _localPlayerX = null;        // Player position in local mini-map
 let _localPlayerY = null;
-let _localGridSize = 5;          // 5x5 grid for local tiles (matching world map granularity)
-let _localTileInterior = false;  // true if player is currently in local tile interior
+let _localMapData = null;        // {width, height, tiles: [{x, y, terrain, resources, mobs, ...}]}
+let _localMapSeed = null;        // Deterministic seed for consistent map generation
+let _localEntryDir = null;       // Entry direction for spawn positioning
 
 // Realm names for display
 const REALM_NAMES = [
@@ -1327,191 +1329,361 @@ function getTileEntryDirection(x, y) {
 function updateWorldViewToggle() {
   const shell = document.querySelector('.world-shell');
   const btn = document.getElementById('btn-toggle-world-view');
-  if (shell) shell.classList.toggle('focus-local', _localViewFocused);
-  if (btn) btn.textContent = _localViewFocused ? 'Show World Map' : 'Focus Local View';
+  if (shell) shell.classList.toggle('focus-local', _viewMode === 'local');
+  if (btn) btn.textContent = _viewMode === 'local' ? 'Back to World Map' : 'Explore Local Tile';
 }
 
 function toggleWorldView() {
-  _localViewFocused = !_localViewFocused;
+  if (_viewMode === 'local') {
+    // Exit local view back to world
+    exitLocalTileView();
+  } else {
+    // Enter local view (if on valid tile)
+    const regionId = getRenderedRegionId(_gameState);
+    const x = _gameState?.tileX ?? 9;
+    const y = _gameState?.tileY ?? 6;
+    const tile = getRegionTile(regionId, x, y);
+    if (tile.t !== 'M') { // Can't explore mountains
+      enterLocalTileView(x, y, regionId);
+    } else {
+      showToast('Cannot explore mountains in detail.', 'warn');
+      return;
+    }
+  }
   updateWorldViewToggle();
+  renderTileMap();
   renderAll();
 }
 
-// ── Local mini-map position tracking ────────────────────────────
-function getLocalPlayerStartPos(entryDirection) {
-  // Player enters mini-map from the opposite direction they're heading
-  // If they enter from east (traveling west), they start on the east edge (x=4)
-  // If they enter from north (traveling south), they start on the north edge (y=0)
-  const centerX = Math.floor(_localGridSize / 2);
-  const centerY = Math.floor(_localGridSize / 2);
+// ── Procedural mini-map generation ──────────────────────────────
+function getMapSizeForTile(tile) {
+  // Determine mini-map size based on tile type and properties
+  // Larger/denser areas = bigger maps
+  const base = {
+    'C': 15,  // Cities: moderate size
+    'H': 12,  // Herb groves: medium
+    'K': 14,  // Caves: exploration-heavy
+    'X': 18,  // Ruins: large and complex
+    'B': 16,  // Lairs: predator territory
+    'V': 10,  // Spirit veins: concentrated
+    'F': 14,  // Forests: sprawling
+    'W': 16,  // Wilderness: vast
+    'R': 8,   // Roads: linear/narrow
+    '.': 12   // Open land: moderate
+  }[tile.t] || 12;
   
-  if (!entryDirection) {
-    // Default to center if no direction known
-    return { x: centerX, y: centerY };
+  // Hazard areas = bigger maps to navigate dangers
+  if (tile.hazard && tile.hazard >= 4) return Math.min(30, base + 8);
+  
+  // Spirit-dense = slightly bigger
+  if (tile.spiritDensity && tile.spiritDensity >= 4) return Math.min(25, base + 4);
+  
+  return base;
+}
+
+function seededRandom(seed, offset = 0) {
+  // Simple seeded PRNG for deterministic generation
+  const x = Math.sin((seed + offset) * 12.9898) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+function generateLocalMap(tile, x, y, entryDir) {
+  // Generate a procedural mini-map for the given world tile
+  const seed = x * 73856093 ^ y * 19349663 ^ (tile.t.charCodeAt(0) * 83492791);
+  const size = getMapSizeForTile(tile);
+  const mid = Math.floor(size / 2);
+  const tiles = [];
+  
+  // Base terrain pass
+  for (let ty = 0; ty < size; ty++) {
+    for (let tx = 0; tx < size; tx++) {
+      let terrain = '.'; // Default open
+      let terrain_kind = 'travel';
+      
+      // Edges/border (depending on tile type and entry)
+      const distFromEdge = Math.min(tx, ty, size - 1 - tx, size - 1 - ty);
+      if (distFromEdge === 0) {
+        terrain = '#'; // Border
+        terrain_kind = 'border';
+      } else if (distFromEdge <= 1) {
+        terrain = tile.t === 'F' ? 'F' : tile.t === 'X' ? 'F' : tile.t === 'B' ? 'F' : '.';
+        terrain_kind = 'fringe';
+      }
+      
+      // Interior: apply tile-specific terrain
+      if (distFromEdge >= 2) {
+        if (tile.t === 'C') {
+          // City: central plaza, roads, buildings
+          if (tx === mid && ty === mid) terrain = 'P'; // Plaza
+          else if (tx === mid || ty === mid) terrain = 'R'; // Road
+          else terrain = 'B'; // Building
+          terrain_kind = 'civic';
+        } else if (tile.t === 'H') {
+          terrain = 'H'; // Herb garden
+          terrain_kind = 'gather';
+        } else if (tile.t === 'K') {
+          if (tx === mid && ty === mid) terrain = 'S'; // Seam center
+          else if (Math.abs(tx - mid) <= 1 && Math.abs(ty - mid) <= 1) terrain = 'S'; // Main seam zone
+          else terrain = 'M'; // Mine tunnel
+          terrain_kind = 'ore';
+        } else if (tile.t === 'X') {
+          if (tx === mid && ty === mid) terrain = 'A'; // Altar/artifact
+          else terrain = 'R'; // Ruin rubble
+          terrain_kind = 'relic';
+        } else if (tile.t === 'B') {
+          if (tx === mid && ty === mid) terrain = 'D'; // Den center
+          else terrain = 'T'; // Trail
+          terrain_kind = 'mob';
+        } else if (tile.t === 'V') {
+          if (tx === mid && ty === mid) terrain = 'Q'; // Qi convergence
+          else terrain = 'M'; // Mist
+          terrain_kind = 'spirit';
+        } else if (tile.t === 'F') {
+          terrain = 'F'; // Forest
+          terrain_kind = 'gather';
+        } else if (tile.t === 'W') {
+          terrain = 'W'; // Wilderness
+          terrain_kind = 'travel';
+        }
+      }
+      
+      tiles.push({ x: tx, y: ty, terrain, terrain_kind, resources: [], mobs: [], hazards: [] });
+    }
   }
   
-  // entryDirection is like 'west', 'north-west', etc.
-  let x = centerX, y = centerY;
-  
-  if (entryDirection.includes('west')) {
-    x = _localGridSize - 1;  // Entered from west means starting on east edge
-  } else if (entryDirection.includes('east')) {
-    x = 0;                    // Entered from east means starting on west edge
+  // Scatter resources based on parent tile
+  const numResources = Math.max(2, Math.floor(size / 3));
+  for (let i = 0; i < numResources; i++) {
+    const rand = seededRandom(seed, i * 100);
+    const tx = Math.floor(rand * (size - 4) + 2);
+    const ty = Math.floor(seededRandom(seed, i * 100 + 1) * (size - 4) + 2);
+    const tileIdx = ty * size + tx;
+    if (tileIdx >= 0 && tileIdx < tiles.length) {
+      if (tile.herbs?.length) tiles[tileIdx].resources.push(...tile.herbs.slice(0, 2));
+      else if (tile.ores?.length) tiles[tileIdx].resources.push(...tile.ores.slice(0, 2));
+      else if (tile.drops?.length) tiles[tileIdx].resources.push(tile.drops[0]);
+    }
   }
   
-  if (entryDirection.includes('north')) {
-    y = _localGridSize - 1;  // Entered from north means starting on south edge
-  } else if (entryDirection.includes('south')) {
-    y = 0;                    // Entered from south means starting on north edge
+  // Scatter mobs if present
+  if (tile.mobs?.length) {
+    const numMobs = Math.max(1, Math.floor(size / 4));
+    for (let i = 0; i < numMobs; i++) {
+      const rand = seededRandom(seed, i * 200 + 50);
+      const tx = Math.floor(rand * (size - 4) + 2);
+      const ty = Math.floor(seededRandom(seed, i * 200 + 51) * (size - 4) + 2);
+      const tileIdx = ty * size + tx;
+      if (tileIdx >= 0 && tileIdx < tiles.length) {
+        tiles[tileIdx].mobs.push(tile.mobs[i % tile.mobs.length]);
+      }
+    }
+  }
+  
+  // Add hazards
+  if (tile.hazard && tile.hazard >= 2) {
+    const numHazards = Math.ceil(tile.hazard / 2);
+    for (let i = 0; i < numHazards; i++) {
+      const rand = seededRandom(seed, i * 300 + 100);
+      const tx = Math.floor(rand * (size - 4) + 2);
+      const ty = Math.floor(seededRandom(seed, i * 300 + 101) * (size - 4) + 2);
+      const tileIdx = ty * size + tx;
+      if (tileIdx >= 0 && tileIdx < tiles.length) {
+        tiles[tileIdx].hazards.push(`hazard-${tile.hazard}`);
+      }
+    }
+  }
+  
+  return { width: size, height: size, tiles };
+}
+
+function getLocalMapSpawnPos(entryDir, mapWidth, mapHeight) {
+  // Player spawns on opposite edge from entry direction
+  let x = Math.floor(mapWidth / 2);
+  let y = Math.floor(mapHeight / 2);
+  
+  if (!entryDir) return { x, y };
+  
+  if (entryDir.includes('west')) {
+    x = mapWidth - 2; // Enter from west = spawn near east edge
+  } else if (entryDir.includes('east')) {
+    x = 1; // Enter from east = spawn near west edge
+  }
+  
+  if (entryDir.includes('north')) {
+    y = mapHeight - 2; // Enter from north = spawn near south edge
+  } else if (entryDir.includes('south')) {
+    y = 1; // Enter from south = spawn near north edge
   }
   
   return { x, y };
 }
 
-function canExitLocalMap(playerX, playerY, entryDirection) {
-  // Player can only exit from the opposite edge of where they entered
-  if (!entryDirection) return false; // Can't exit if no entry recorded
+function enterLocalTileView(worldX, worldY, regionId) {
+  // Switch to local view for a world tile
+  const tile = getRegionTile(regionId, worldX, worldY);
+  const entryDir = getTileEntryDirection(worldX, worldY);
   
-  const maxIdx = _localGridSize - 1;
+  _viewMode = 'local';
+  _localViewTile = { x: worldX, y: worldY, regionId };
+  _localMapData = generateLocalMap(tile, worldX, worldY, entryDir);
+  _localEntryDir = entryDir;
   
-  // Check if player is at the opposite edge from entry direction
-  if (entryDirection.includes('west') && playerX === 0) return true;    // Traveled west, can exit east
-  if (entryDirection.includes('east') && playerX === maxIdx) return true; // Traveled east, can exit west
-  if (entryDirection.includes('north') && playerY === 0) return true;   // Traveled north, can exit south
-  if (entryDirection.includes('south') && playerY === maxIdx) return true; // Traveled south, can exit north
-  
-  return false;
+  const spawnPos = getLocalMapSpawnPos(entryDir, _localMapData.width, _localMapData.height);
+  _localPlayerX = spawnPos.x;
+  _localPlayerY = spawnPos.y;
 }
 
-function moveLocalPlayer(dx, dy) {
-  // Move player within the local mini-map
-  if (_localPlayerX === null || _localPlayerY === null) return false;
-  
-  const newX = _localPlayerX + dx;
-  const newY = _localPlayerY + dy;
-  
-  // Bounds check
-  if (newX < 0 || newX >= _localGridSize || newY < 0 || newY >= _localGridSize) {
-    return false; // Can't move outside bounds
-  }
-  
-  _localPlayerX = newX;
-  _localPlayerY = newY;
-  return true;
-}
-
-function externalLocalMap(worldX, worldY) {
-  // Player exits local mini-map and returns to world tile
-  if (!canExitLocalMap(_localPlayerX, _localPlayerY, getTileEntryDirection(worldX, worldY))) {
-    return false; // Can't exit from this position
-  }
-  
-  // Reset local state
-  _localTileInterior = false;
+function exitLocalTileView() {
+  // Switch back to world view
+  _viewMode = 'world';
+  _localViewTile = null;
+  _localMapData = null;
   _localPlayerX = null;
   _localPlayerY = null;
+}
+
+function moveLocalPlayer(tx, ty) {
+  // Move player to specific position in local map
+  if (!_localMapData) return false;
   
+  // Bounds check
+  if (tx < 0 || tx >= _localMapData.width || ty < 0 || ty >= _localMapData.height) return false;
+  
+  // Check if terrain is traversable (skip borders)
+  const tile = _localMapData.tiles[ty * _localMapData.width + tx];
+    if (!tile || tile.terrain === '#' || tile.terrain === 'B') return false;
+  
+  _localPlayerX = tx;
+  _localPlayerY = ty;
   return true;
 }
 
-function enterLocalMap(worldX, worldY) {
-  // Player enters local mini-map for the given world tile
-  const entryDir = getTileEntryDirection(worldX, worldY);
-  const startPos = getLocalPlayerStartPos(entryDir);
-  
-  _localTileInterior = true;
-  _localPlayerX = startPos.x;
-  _localPlayerY = startPos.y;
-}
+  function getLocalPlayerTile() {
+    if (!_localMapData || _localPlayerX === null || _localPlayerY === null) return null;
+    return _localMapData.tiles[_localPlayerY * _localMapData.width + _localPlayerX] || null;
+  }
 
-function renderLocalMiniMap(tile, x, y) {
-  // Render 5x5 mini-map grid view
-  const grid = document.getElementById('world-local-grid');
-  const detail = document.getElementById('world-local-site-detail');
-  if (!grid || !detail) return;
-  
-  const subtiles = buildLocalMiniMapTiles(tile, x, y);
-  const tileKey = getTileIdentity(tile, x, y);
-  
-  // Show mini-map info
-  const summary = document.getElementById('world-site-summary');
-  if (summary) {
-    const areaName = getTileAreaProfile(tile).name;
-    summary.textContent = `${areaName} · Local mini-map · Navigate with arrow keys or click tiles`;
-  }
-  
-  // Render 5x5 grid
-  grid.innerHTML = '';
-  grid.style.gridTemplateColumns = `repeat(${_localGridSize}, 1fr)`;
-  grid.style.gridTemplateRows = `repeat(${_localGridSize}, 1fr)`;
-  
-  for (const subtile of subtiles) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = `local-mini-tile kind-${subtile.kind}`;
-    if (_localPlayerX === subtile.x && _localPlayerY === subtile.y) {
-      btn.classList.add('is-player');
+  function getLocalActionForSubtile(worldTile, subtile) {
+    if (!subtile) return null;
+    if (subtile.mobs?.length) return 'mobs';
+    if (subtile.resources?.length) {
+      if (worldTile.herbs?.length) return 'herbs';
+      if (worldTile.ores?.length) return 'ores';
+      if (worldTile.drops?.length || worldTile.t === 'X') return 'relic';
     }
-    btn.innerHTML = `
-      <span class="local-mini-icon">${escHtml(subtile.icon)}</span>
-      <span class="local-mini-label">${escHtml(subtile.label)}</span>
-    `;
-    btn.title = `[${subtile.x},${subtile.y}] ${subtile.label}`;
-    btn.addEventListener('click', () => inspectLocalTile(subtile, x, y));
-    grid.appendChild(btn);
+    if (worldTile.spiritDensity && (subtile.terrain === 'Q' || subtile.terrain === 'M')) return 'spirit';
+    return null;
   }
-  
-  // Detail panel for center tile
-  if (_localPlayerX !== null && _localPlayerY !== null) {
-    const playerTile = subtiles.find(s => s.x === _localPlayerX && s.y === _localPlayerY);
-    if (playerTile) {
+
+  function renderLocalInspector(tile, x, y) {
+    const grid = document.getElementById('world-local-grid');
+    const detail = document.getElementById('world-local-site-detail');
+    const summary = document.getElementById('world-site-summary');
+    if (!grid || !detail) return;
+
+    const area = getTileAreaProfile(tile);
+    const isLocalActive = _viewMode === 'local'
+      && _localMapData
+      && _localViewTile
+      && _localViewTile.x === x
+      && _localViewTile.y === y;
+    const isPlayerTile = x === (_gameState?.tileX ?? 9) && y === (_gameState?.tileY ?? 6);
+    const canExplore = isPlayerTile && _travelReadyAt <= Date.now();
+
+    grid.classList.add('is-inspector');
+
+    if (isLocalActive) {
+      const subtile = getLocalPlayerTile();
+      const action = getLocalActionForSubtile(tile, subtile);
+      const resourceText = subtile?.resources?.length
+        ? subtile.resources.map(titleizeSlug).join(', ')
+        : 'No marked materials on this step.';
+      const mobText = subtile?.mobs?.length
+        ? subtile.mobs.map(titleizeSlug).join(', ')
+        : 'No hostiles marked on this step.';
+      const hazardText = subtile?.hazards?.length
+        ? `Hazard pressure ${tile.hazard ?? 1}.`
+        : 'Stable footing.';
+
+      if (summary) summary.textContent = `${area.name} · Local field ${_localMapData.width}x${_localMapData.height}`;
+      grid.innerHTML = `
+        <div class="local-inspector-card">
+          <div class="local-inspector-label">Position</div>
+          <div class="local-inspector-value">${_localPlayerX}, ${_localPlayerY}</div>
+          <div class="local-inspector-copy">Step-by-step local traversal. Adjacent tiles only.</div>
+        </div>
+        <div class="local-inspector-card">
+          <div class="local-inspector-label">Ground</div>
+          <div class="local-inspector-value">${escHtml(titleizeSlug(subtile?.terrain_kind || 'unknown'))}</div>
+          <div class="local-inspector-copy">${escHtml(hazardText)}</div>
+        </div>
+        <div class="local-inspector-card">
+          <div class="local-inspector-label">Resources</div>
+          <div class="local-inspector-value">${escHtml(resourceText)}</div>
+          <div class="local-inspector-copy">Local node reads update as you move.</div>
+        </div>
+        <div class="local-inspector-card">
+          <div class="local-inspector-label">Pressure</div>
+          <div class="local-inspector-value">${escHtml(mobText)}</div>
+          <div class="local-inspector-copy">Use world view when you need the larger route again.</div>
+        </div>
+      `;
+
       detail.innerHTML = `
         <div class="world-site-detail-head">
           <div>
-            <div class="tile-detail-kicker">Local Position [${_localPlayerX},${_localPlayerY}]</div>
-            <h4 class="world-site-detail-title">${escHtml(playerTile.label)}</h4>
+            <div class="tile-detail-kicker">Local Field Active</div>
+            <h4 class="world-site-detail-title">${escHtml(area.name)} · ${escHtml(titleizeSlug(subtile?.terrain_kind || 'ground'))}</h4>
           </div>
-          <span class="world-site-detail-glyph">${escHtml(playerTile.icon)}</span>
+          <span class="world-site-detail-glyph">⊕</span>
         </div>
-        <p class="tile-section-copy">You are standing here. Use arrow keys to move to adjacent tiles.</p>
+        <p class="tile-section-copy">Navigate the detailed terrain directly in the main map. Resources, mobs, and hazard pockets are distributed across this full local field instead of a 3x3 menu.</p>
         <div class="world-site-actions">
-          ${_localPlayerX === 0 || _localPlayerX === 4 || _localPlayerY === 0 || _localPlayerY === 4 ? `
-            <button type="button" class="btn-sm btn-primary" onclick="exitLocalTileMap(${x}, ${y})">Exit to World</button>
-          ` : `
-            <p style="color:#888;font-size:0.9em;">Move to an edge tile to exit</p>
-          `}
-          ${['gather','ore','mob','spirit'].includes(playerTile.kind) ? `
-            <button type="button" class="btn-sm btn-ghost" onclick="performLocalAction('${playerTile.kind}', ${x}, ${y})">Work Site</button>
-          ` : ''}
+          <button type="button" class="btn-sm btn-primary" onclick="toggleWorldView()">Back to World Map</button>
+          ${action ? `<button type="button" class="btn-sm btn-ghost" onclick="performTileFieldAction('${action}', ${x}, ${y})">Work This Node</button>` : ''}
         </div>
       `;
+      return;
     }
+
+    if (summary) summary.textContent = `${area.name} · Tile field profile`;
+    grid.innerHTML = `
+      <div class="local-inspector-card">
+        <div class="local-inspector-label">Projected Size</div>
+        <div class="local-inspector-value">${getMapSizeForTile(tile)} x ${getMapSizeForTile(tile)}</div>
+        <div class="local-inspector-copy">Each world tile expands into its own explorable field.</div>
+      </div>
+      <div class="local-inspector-card">
+        <div class="local-inspector-label">Resources</div>
+        <div class="local-inspector-value">${escHtml((tile.herbs || tile.ores || tile.drops || []).slice(0, 2).map(titleizeSlug).join(', ') || 'Scattered nodes')}</div>
+        <div class="local-inspector-copy">Resource nodes are spread through the local field instead of grouped in a fixed menu.</div>
+      </div>
+      <div class="local-inspector-card">
+        <div class="local-inspector-label">Mob Pressure</div>
+        <div class="local-inspector-value">${escHtml(tile.mobs?.length ? tile.mobs.map(titleizeSlug).join(', ') : 'Low')}</div>
+        <div class="local-inspector-copy">Hostiles occupy their own cells and routes.</div>
+      </div>
+      <div class="local-inspector-card">
+        <div class="local-inspector-label">Traversal</div>
+        <div class="local-inspector-value">Direct Map View</div>
+        <div class="local-inspector-copy">Swap between world and local views from the same main map viewport.</div>
+      </div>
+    `;
+
+    detail.innerHTML = `
+      <div class="world-site-detail-head">
+        <div>
+          <div class="tile-detail-kicker">Local Field Preview</div>
+          <h4 class="world-site-detail-title">${escHtml(area.name)}</h4>
+        </div>
+        <span class="world-site-detail-glyph">${escHtml(TILE_GLYPHS[tile.t] ?? '·')}</span>
+      </div>
+      <p class="tile-section-copy">The local view for this tile is a full explorable field with variable scale, distributed nodes, and step-by-step movement across detailed subtiles.</p>
+      <div class="world-site-actions">
+        ${canExplore ? '<button type="button" class="btn-sm btn-primary" onclick="toggleWorldView()">Open Local Field</button>' : '<span class="world-empty-note">Stand on this tile and finish traveling to open its local field.</span>'}
+      </div>
+    `;
   }
-}
-
-function inspectLocalTile(subtile, worldX, worldY) {
-  // Click on a subtile to move to it
-  moveLocalPlayer(subtile.x - (_localPlayerX ?? 0), subtile.y - (_localPlayerY ?? 0));
-  const regionId = getRenderedRegionId(_gameState);
-  const tile = getRegionTile(regionId, worldX, worldY);
-  renderLocalMiniMap(tile, worldX, worldY);
-}
-
-function performLocalAction(kind, x, y) {
-  // Work a local subtile (harvest, mine, hunt, resonate)
-  if (_guestMode || !_character) return;
-  performTileFieldAction(kind === 'gather' ? 'herbs' : kind === 'ore' ? 'ores' : kind === 'mob' ? 'mobs' : 'spirit', x, y);
-}
-
-function exitLocalTileMap(x, y) {
-  // Exit the local mini-map back to world tile
-  if (!externalLocalMap(x, y)) {
-    showToast('Cannot exit from this position. Move to an edge tile first.', 'warn');
-    return;
-  }
-  renderAll();
-  showToast('Exited local map to world tile.', 'ok');
-}
 
 function makeLocalSite(tileKey, key, name, glyph, kind, desc, actionHint) {
   return { id: `${tileKey}:${key}`, key, name, glyph, kind, desc, actionHint };
@@ -1920,43 +2092,7 @@ async function performTileFieldAction(mode, x, y) {
 }
 
 function renderLocalTileMap(tile, x, y) {
-  const grid = document.getElementById('world-local-grid');
-  const detail = document.getElementById('world-local-site-detail');
-  const summary = document.getElementById('world-site-summary');
-  if (!grid || !detail) return;
-
-  const sites = buildLocalTileSites(tile, x, y);
-  const tileKey = getTileIdentity(tile, x, y);
-  let selected = _selectedTileSite && _selectedTileSite.tileKey === tileKey
-    ? sites.find(site => site.id === _selectedTileSite.siteId)
-    : null;
-  if (!selected) selected = sites[4] || sites[0] || null;
-  if (!selected) return;
-
-  _selectedTileSite = { tileKey, siteId: selected.id };
-  if (summary) summary.textContent = `${getTileAreaProfile(tile).name} · Local exploration map`;
-
-  grid.innerHTML = sites.map(site => `
-    <button type="button" class="world-local-node kind-${site.kind}${site.id === selected.id ? ' is-active' : ''}" onclick="inspectTileSite('${site.id}', ${x}, ${y})">
-      <span class="world-local-node-glyph">${escHtml(site.glyph)}</span>
-      <span class="world-local-node-name">${escHtml(site.name)}</span>
-    </button>
-  `).join('');
-
-  const actions = getLocalSiteActions(selected, tile, x, y);
-  detail.innerHTML = `
-    <div class="world-site-detail-head">
-      <div>
-        <div class="tile-detail-kicker">Local Node</div>
-        <h4 class="world-site-detail-title">${escHtml(selected.name)}</h4>
-      </div>
-      <span class="world-site-detail-glyph">${escHtml(selected.glyph)}</span>
-    </div>
-    <p class="tile-section-copy">${escHtml(selected.desc)}</p>
-    <div class="world-site-actions">
-      ${actions.map(action => `<button type="button" class="btn-sm ${action.kind === 'primary' ? 'btn-primary' : 'btn-ghost'}" onclick="${action.action}">${escHtml(action.label)}</button>`).join('')}
-    </div>
-  `;
+  renderLocalInspector(tile, x, y);
 }
 
 function renderWorldQuestBoard(currentTile, selectedTile) {
@@ -2126,22 +2262,7 @@ function renderWorldServiceDock(tile, x, y) {
 function renderWorldSupportPanels(selectedTile, x, y) {
   const regionId = getRenderedRegionId(_gameState);
   const currentTile = getRegionTile(regionId, _gameState?.tileX ?? 9, _gameState?.tileY ?? 6);
-  const currentX = _gameState?.tileX ?? 9;
-  const currentY = _gameState?.tileY ?? 6;
-  const isPlayerHere = x === currentX && y === currentY;
-  
-  // If player is on this tile and not traveling, show the local mini-map for navigation
-  if (isPlayerHere && _travelReadyAt <= Date.now()) {
-    // Initialize local map on first arrival if not already in interior
-    if (!_localTileInterior) {
-      enterLocalMap(x, y);
-    }
-    renderLocalMiniMap(selectedTile, x, y);
-  } else {
-    // For other tiles or while traveling, use the old site list view
-    renderLocalTileMap(selectedTile, x, y);
-  }
-  
+  renderLocalInspector(selectedTile, x, y);
   renderWorldQuestBoard(currentTile, selectedTile);
   renderWorldPresenceFeed(currentTile, selectedTile);
   renderWorldServiceDock(selectedTile.cityId ? selectedTile : currentTile, x, y);
@@ -2240,13 +2361,26 @@ function renderTileMap() {
   const wrap = document.getElementById('tile-map-wrap');
   if (!grid || !wrap || !_character || !_gameState) return;
 
+  const SUBTILE_SIZE = 34; // Same size as world tiles for consistency
+  
+  // Render either world map or local map based on view mode
+  if (_viewMode === 'local' && _localMapData && _localViewTile) {
+    renderLocalMapView(grid, wrap, SUBTILE_SIZE);
+  } else {
+    renderWorldMapView(grid, wrap, SUBTILE_SIZE);
+  }
+}
+
+function renderWorldMapView(grid, wrap, TILE_SIZE) {
+  // Original world map rendering
+  if (!_character || !_gameState) return;
+
   const state = _gameState;
   const regionId = getRenderedRegionId(state);
   const px = state.tileX ?? 9;
   const py = state.tileY ?? 6;
   const visited = new Set(state.visitedTiles ?? []);
 
-  // If the rendered region has no revealed data yet, pre-reveal around the player.
   if (countVisitedTiles(visited, regionId) === 0) {
     for (let dy = -2; dy <= 2; dy++)
       for (let dx = -2; dx <= 2; dx++)
@@ -2289,9 +2423,7 @@ function renderTileMap() {
       if (isSelected) cls += ' t-selected';
       if (isTravelOrigin) cls += ' t-travel-origin';
       if (isTravelTarget) cls += ' t-travel-target';
-      // City-specific color class
       if (tile.t === 'C' && tile.cityId) cls += ` city-${tile.cityId}`;
-      // Area biome class for color variety
       if (tile.areaId) cls += ` area-${tile.areaId.split('-').slice(0,2).join('-')}`;
       div.className = cls;
       div.textContent = isPlayer ? '⊕' : (TILE_GLYPHS[tile.t] ?? '·');
@@ -2300,7 +2432,14 @@ function renderTileMap() {
       if (canMove) {
         div.addEventListener('click', () => moveTile(x, y));
       } else if (isVis && tile.t !== 'M') {
-        div.addEventListener('click', () => showTileInfo(tile, x, y));
+        div.addEventListener('click', () => {
+          if (isPlayer && _travelReadyAt <= Date.now()) {
+            enterLocalTileView(x, y, regionId);
+            renderTileMap();
+          } else {
+            showTileInfo(tile, x, y);
+          }
+        });
       }
 
       grid.appendChild(div);
@@ -2327,7 +2466,6 @@ function renderTileMap() {
     }
   }
 
-  // Update realm label
   const realmLabel = document.getElementById('explore-realm-label');
   if (realmLabel) {
     const rName = REALM_NAMES[_character.realm_index] ?? 'Mortal';
@@ -2342,6 +2480,99 @@ function renderTileMap() {
   renderWorldHud(regionId, px, py, visited);
   const activeTile = getRegionTile(regionId, _selectedWorldTile.x, _selectedWorldTile.y);
   showTileInfo(activeTile, _selectedWorldTile.x, _selectedWorldTile.y, { preserveSelection: true });
+}
+
+function renderLocalMapView(grid, wrap, TILE_SIZE) {
+  // Render procedurally generated local mini-map
+  if (!_localMapData || !_localViewTile) return;
+  
+  const mapW = _localMapData.width;
+  const mapH = _localMapData.height;
+  const tiles = _localMapData.tiles;
+  const worldTile = getRegionTile(_localViewTile.regionId, _localViewTile.x, _localViewTile.y);
+  
+  grid.innerHTML = '';
+  grid.style.gridTemplateColumns = `repeat(${mapW}, ${TILE_SIZE}px)`;
+  grid.style.gridTemplateRows = `repeat(${mapH}, ${TILE_SIZE}px)`;
+  
+  // Render each local subtile
+  for (let y = 0; y < mapH; y++) {
+    for (let x = 0; x < mapW; x++) {
+      const subtile = tiles[y * mapW + x];
+      if (!subtile) continue;
+      
+      const isPlayer = x === _localPlayerX && y === _localPlayerY;
+      const canStep = Math.abs(x - _localPlayerX) + Math.abs(y - _localPlayerY) === 1;
+      const terrainGlyph = subtile.mobs?.length
+        ? '☠'
+        : subtile.hazards?.length
+          ? '!'
+          : subtile.resources?.length
+            ? (worldTile.herbs?.length ? '✿' : worldTile.ores?.length ? '⛏' : '◆')
+            : ({ '#': '█', 'P': '◎', 'R': '·', 'B': '▥', 'H': '✿', 'F': '♣', 'W': '≈', 'M': '~', 'S': '◈', 'T': '⋰', 'D': '⊛', 'Q': '✺', 'A': '◆' }[subtile.terrain] || '·');
+      
+      const div = document.createElement('div');
+      const terrainClass = subtile.terrain === '#' ? 'border' : subtile.terrain.toLowerCase();
+      let cls = `local-tile terrain-${terrainClass}`;
+      
+      if (isPlayer) {
+        cls += ' is-player';
+      } else if (canStep && subtile.terrain !== '#' && subtile.terrain !== 'B') {
+        cls += ' is-adjacent';
+      } else if (subtile.resources?.length) {
+        cls += ' has-resource';
+      } else if (subtile.mobs?.length) {
+        cls += ' has-mob';
+      } else if (subtile.hazards?.length) {
+        cls += ' has-hazard';
+      }
+      
+      if (subtile.terrain === '#') {
+        cls += ' is-border';
+      }
+      
+      div.className = cls;
+      div.textContent = isPlayer ? '⊕' : terrainGlyph;
+      div.title = `[${x},${y}] ${subtile.terrain_kind}`;
+      
+      if (!isPlayer && canStep && subtile.terrain !== '#' && subtile.terrain !== 'B') {
+        div.addEventListener('click', () => {
+          if (moveLocalPlayer(x, y)) {
+            renderTileMap();
+          }
+        });
+        div.style.cursor = 'pointer';
+      }
+      
+      grid.appendChild(div);
+    }
+  }
+  
+  // Center viewport on local player
+  const vpW = wrap.clientWidth || 600;
+  const vpH = wrap.clientHeight || 440;
+  const offsetX = Math.round(vpW / 2 - (_localPlayerX + 0.5) * TILE_SIZE);
+  const offsetY = Math.round(vpH / 2 - (_localPlayerY + 0.5) * TILE_SIZE);
+  grid.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+
+  const marker = document.getElementById('tile-travel-marker');
+  if (marker) {
+    marker.classList.remove('active');
+    marker.innerHTML = '';
+  }
+  wrap.classList.remove('is-traveling');
+  
+  // Update realm label to show local map info
+  const realmLabel = document.getElementById('explore-realm-label');
+  if (realmLabel) {
+    const areaName = getTileAreaProfile(worldTile).name;
+    realmLabel.textContent = `${areaName} · Local Map ${_localMapData.width}×${_localMapData.height}`;
+  }
+
+  showTileInfo(worldTile, _localViewTile.x, _localViewTile.y, {
+    preserveSelection: true,
+    statusMessage: 'Local field view active. Move one subtile at a time across the detailed terrain, then swap back to the world map whenever you want the broader route.'
+  });
 }
 
 async function moveTile(x, y) {
@@ -2486,6 +2717,9 @@ function showTileInfo(tile, x, y, options = {}) {
   }
   if (tile.cityId) {
     actionButtons.push(`<button type="button" class="btn-sm btn-ghost" onclick="previewWorldAction('city', ${x}, ${y})">City Hooks</button>`);
+  }
+  if (isPlayer && !isTraveling) {
+    actionButtons.unshift(`<button type="button" class="btn-sm btn-primary" onclick="toggleWorldView()">${_viewMode === 'local' ? 'Back to World Map' : 'Open Local Field'}</button>`);
   }
 
   const state = _gameState ?? { hp: 0, hpMax: 0, qi: 0, qiMax: 0, battleQi: 0, battleQiMax: 0 };
@@ -2663,13 +2897,11 @@ function setupExplorePanel() {
   document.getElementById('btn-toggle-world-view')?.addEventListener('click', toggleWorldView);
   updateWorldViewToggle();
   
-  // Keyboard controls for local mini-map navigation
+  // Keyboard controls for local map navigation
   document.addEventListener('keydown', (e) => {
-    if (!_localTileInterior || _localPlayerX === null || _localPlayerY === null) return;
-    if (e.ctrlKey || e.metaKey || e.altKey) return; // Skip if modifier keys pressed
+    if (_viewMode !== 'local' || _localPlayerX === null || _localPlayerY === null) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
     
-    const currentX = _gameState?.tileX ?? 9;
-    const currentY = _gameState?.tileY ?? 6;
     let moved = false;
     
     switch (e.key) {
@@ -2677,36 +2909,34 @@ function setupExplorePanel() {
       case 'w':
       case 'W':
         e.preventDefault();
-        moved = moveLocalPlayer(0, -1);
+        moved = moveLocalPlayer(_localPlayerX, _localPlayerY - 1);
         break;
       case 'ArrowDown':
       case 's':
       case 'S':
         e.preventDefault();
-        moved = moveLocalPlayer(0, 1);
+        moved = moveLocalPlayer(_localPlayerX, _localPlayerY + 1);
         break;
       case 'ArrowLeft':
       case 'a':
       case 'A':
         e.preventDefault();
-        moved = moveLocalPlayer(-1, 0);
+        moved = moveLocalPlayer(_localPlayerX - 1, _localPlayerY);
         break;
       case 'ArrowRight':
       case 'd':
       case 'D':
         e.preventDefault();
-        moved = moveLocalPlayer(1, 0);
+        moved = moveLocalPlayer(_localPlayerX + 1, _localPlayerY);
         break;
       case 'Escape':
         e.preventDefault();
-        exitLocalTileMap(currentX, currentY);
+        toggleWorldView();
         break;
     }
     
     if (moved) {
-      const regionId = getRenderedRegionId(_gameState);
-      const tile = getRegionTile(regionId, currentX, currentY);
-      renderLocalMiniMap(tile, currentX, currentY);
+      renderTileMap();
     }
   });
 }

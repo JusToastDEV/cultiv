@@ -2261,8 +2261,36 @@ button.btn-locked {
 }
 .world-local-grid {
   display:grid;
-  grid-template-columns:repeat(3, minmax(0, 1fr));
+  grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));
   gap:.55rem;
+}
+.world-local-grid.is-inspector {
+  grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));
+}
+.local-inspector-card {
+  min-height:96px;
+  border:1px solid rgba(201,162,50,.12);
+  border-radius:10px;
+  background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(0,0,0,.14));
+  padding:.85rem;
+}
+.local-inspector-label {
+  font-size:.7rem;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--ink-3);
+}
+.local-inspector-value {
+  margin-top:.25rem;
+  font-size:.95rem;
+  color:var(--paper);
+  line-height:1.35;
+}
+.local-inspector-copy {
+  margin-top:.35rem;
+  font-size:.78rem;
+  line-height:1.45;
+  color:var(--ink-2);
 }
 .world-local-node {
   min-height:100px;
@@ -2320,6 +2348,52 @@ button.btn-locked {
   border-color:rgba(201,162,50,.35);
   transform:scale(1.05);
   background:linear-gradient(180deg, rgba(201,162,50,.06), rgba(0,0,0,.10));
+}
+.local-tile {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border:1px solid rgba(201,162,50,.14);
+  background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(0,0,0,.18));
+  color:var(--ink-1);
+  font-size:1rem;
+  transition:border-color .12s ease, transform .12s ease, box-shadow .12s ease, background-color .12s ease;
+}
+.local-tile.is-adjacent {
+  border-color:rgba(201,162,50,.36);
+  box-shadow:inset 0 0 0 1px rgba(201,162,50,.1);
+}
+.local-tile.is-adjacent:hover {
+  transform:translateY(-1px);
+  background:linear-gradient(180deg, rgba(201,162,50,.08), rgba(0,0,0,.14));
+}
+.local-tile.is-player {
+  border-color:rgba(58,125,96,.62);
+  box-shadow:0 0 0 2px rgba(58,125,96,.2), inset 0 1px 0 rgba(58,125,96,.16);
+  background:linear-gradient(180deg, rgba(58,125,96,.14), rgba(58,125,96,.05));
+}
+.local-tile.has-resource {
+  color:#d9bf6e;
+}
+.local-tile.has-mob {
+  color:#df7267;
+}
+.local-tile.has-hazard {
+  color:#f1a24d;
+}
+.local-tile.is-border,
+.local-tile.terrain-b {
+  background:rgba(0,0,0,.32);
+  color:rgba(255,255,255,.3);
+}
+.local-tile.terrain-r {
+  background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(201,162,50,.08));
+}
+.local-tile.terrain-p,
+.local-tile.terrain-q,
+.local-tile.terrain-a,
+.local-tile.terrain-s {
+  background:linear-gradient(180deg, rgba(58,125,96,.12), rgba(0,0,0,.18));
 }
 .local-mini-tile.is-player {
   border-color:rgba(58,125,96,.6);
