@@ -809,40 +809,30 @@ function buildInitialState(name, origin, path) {
 }
 
 function getStartingRegion(origin) {
-  const map = {
-    'ashen-cultivator': 'ashen-frontier',
-    'verdant-herbalist': 'jade-delta',
-    'void-walker': 'void-rift',
-    'heaven-exile': 'celestial-plateau',
-    'ancient-remnant': 'sovereign-wastes',
-    'outlander': 'ashen-frontier'
-  };
-  return map[origin] ?? 'ashen-frontier';
+  return 'ashen-frontier';
 }
 
 function getStartingCity(origin) {
-  const map = {
-    'ashen-cultivator': 'ember',
-    'verdant-herbalist': 'jade',
-    'void-walker': 'void',
-    'heaven-exile': 'starfall',
-    'ancient-remnant': 'dao-furnace',
-    'outlander': 'ashgate'
-  };
-  return map[origin] ?? 'ashgate';
+  return 'ashgate';
 }
 
 function getStartingTileX(origin) {
-  const map = { 'ashen-cultivator': 4, 'verdant-herbalist': 9, 'void-walker': 9, 'heaven-exile': 9, 'ancient-remnant': 9, 'outlander': 9 };
-  return map[origin] ?? 9;
+  return 9;
 }
 
 function getStartingTileY(origin) {
-  const map = { 'ashen-cultivator': 2, 'verdant-herbalist': 6, 'void-walker': 6, 'heaven-exile': 6, 'ancient-remnant': 6, 'outlander': 6 };
-  return map[origin] ?? 6;
+  return 6;
 }
 
 function buildStartingVisited(regionId, cx, cy) {
+  if (regionId === 'ashen-frontier') {
+    return [
+      'ashen-frontier:8:5', 'ashen-frontier:9:5', 'ashen-frontier:10:5',
+      'ashen-frontier:8:6', 'ashen-frontier:9:6', 'ashen-frontier:10:6',
+      'ashen-frontier:8:7', 'ashen-frontier:9:7', 'ashen-frontier:10:7'
+    ];
+  }
+
   const tiles = [];
   for (let dy = -2; dy <= 2; dy++) {
     for (let dx = -2; dx <= 2; dx++) {
@@ -859,6 +849,12 @@ function isTileImpassable(regionId, x, y) {
   }
   return false;
 }
+
+const EARLY_ACCESS_STARTER_KEYS = new Set([
+  '8:5', '9:5', '10:5',
+  '8:6', '9:6', '10:6',
+  '8:7', '9:7', '10:7'
+]);
 
 function actionMoveToTile(state, character, options) {
   const { x, y, regionId } = options ?? {};
@@ -880,6 +876,13 @@ function actionMoveToTile(state, character, options) {
     return { error: 'Can only move one tile at a time', state };
   }
 
+  if (targetRegion === 'ashen-frontier') {
+    const key = `${x}:${y}`;
+    if (!EARLY_ACCESS_STARTER_KEYS.has(key)) {
+      return { error: 'This frontier route is sealed during early access. Ashgate and the surrounding 3x3 frontier block are the current playable world slice.', state };
+    }
+  }
+
   if (isTileImpassable(targetRegion, x, y)) {
     return { error: 'Impassable terrain', state };
   }
@@ -890,7 +893,14 @@ function actionMoveToTile(state, character, options) {
   const visited = new Set(state.visitedTiles ?? []);
   for (let ny = y - 1; ny <= y + 1; ny++) {
     for (let nx = x - 1; nx <= x + 1; nx++) {
-      visited.add(`${targetRegion}:${nx}:${ny}`);
+      if (targetRegion !== 'ashen-frontier') {
+        visited.add(`${targetRegion}:${nx}:${ny}`);
+      } else {
+        const neighborKey = `${nx}:${ny}`;
+        if (EARLY_ACCESS_STARTER_KEYS.has(neighborKey)) {
+          visited.add(`${targetRegion}:${nx}:${ny}`);
+        }
+      }
     }
   }
   newState.visitedTiles = [...visited];

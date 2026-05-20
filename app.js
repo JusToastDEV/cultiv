@@ -1181,6 +1181,24 @@ const AF_SPECIAL = new Map([
   ['22:20',{t:'F',name:'Deep Spirit Grove',    herbs:['soul-amber'],                  mobs:['spirit-stag'],                  afkable:true}],
 ]);
 
+const EARLY_ACCESS_STARTER_TILES = new Map([
+  ['8:5',  { t:'C', name:'North Market Ward', cityId:'ashgate', localSize:22, localHooksText:'Canopy stalls, ration ledgers, and craft rows dominate this block.' }],
+  ['9:5',  { t:'C', name:'Sect Gate Approach', cityId:'ashgate', localSize:22, localHooksText:'Sect screening courts, petition steps, and spar lanes define the approach.' }],
+  ['10:5', { t:'C', name:'Scriptorium Row', cityId:'ashgate', localSize:21, localHooksText:'Scroll brokers, lacquer stalls, and quiet archive doors hold this side of Ashgate.' }],
+  ['8:6',  { t:'C', name:'Guild Caravan Yard', cityId:'ashgate', localSize:22, localHooksText:'Caravan pens, weigh bridges, and guild dispatch desks keep this block busy.' }],
+  ['9:6',  { t:'C', name:'Ashgate Borough', cityId:'ashgate', localSize:24, localHooksText:'Plaza traffic, the silver vault, the duel ring, and the core civic routes converge here.' }],
+  ['10:6', { t:'C', name:'Broker Lantern Ward', cityId:'ashgate', localSize:22, localHooksText:'Patron brokers, rumor tables, and courier lamps light the ward through the night.' }],
+  ['8:7',  { t:'H', name:'Reed Garden Terraces', areaId:'ashgate-reed-garden', localSize:20, localHooksText:'Herb terraces, drying sheds, and beginner gather loops are being built out here.', herbs:['qi-grass', 'dustbloom', 'charbloom'], afkable:true, hazard:1 }],
+  ['9:7',  { t:'V', name:'Ashgate Training Grounds', areaId:'ashgate-training-grounds', localSize:20, localHooksText:'Meditation stones, sect drills, and sparring rings make this the starter discipline yard.', spiritDensity:2, herbs:['qi-grass'], afkable:true, hazard:1 }],
+  ['10:7', { t:'K', name:'Cinder Quarry Mouth', areaId:'ashgate-quarry-mouth', localSize:20, localHooksText:'Ore lifts, lantern camps, and starter mining routes anchor the quarry edge.', ores:['black-iron-ore', 'refined-iron-plate'], drops:['broken-rune-shard'], afkable:true, hazard:1 }]
+]);
+
+const EARLY_ACCESS_OPEN_TILES = new Set(EARLY_ACCESS_STARTER_TILES.keys());
+
+function isEarlyAccessWorldTile(regionId, x, y) {
+  return regionId === 'ashen-frontier' && EARLY_ACCESS_OPEN_TILES.has(`${x}:${y}`);
+}
+
 const AF_W = 36, AF_H = 26;
 const TILE_GLYPHS = { M:'▲', R:'·', C:'⌂', W:'≋', F:'♦', X:'✦', V:'◎', K:'⛏', H:'✿', B:'⊛', '.':'·' };
 const TILE_TERRAIN_NAMES = {
@@ -1192,7 +1210,21 @@ const TILE_SIZE = 34;
 
 function getAfTile(x, y) {
   if (x <= 0 || x >= AF_W - 1 || y <= 0 || y >= AF_H - 1) return { t:'M' };
-  return AF_SPECIAL.get(`${x}:${y}`) ?? { t:'.' };
+  const key = `${x}:${y}`;
+  const starterTile = EARLY_ACCESS_STARTER_TILES.get(key);
+  if (starterTile) return { ...starterTile };
+
+  const baseTile = AF_SPECIAL.get(key) ?? { t:'.' };
+  if (baseTile.t !== 'M' && !isEarlyAccessWorldTile('ashen-frontier', x, y)) {
+    return {
+      ...baseTile,
+      closedOff: true,
+      name: baseTile.name || 'Sealed Frontier',
+      earlyAccessNote: 'This route is temporarily sealed while the Ashgate starter 3x3 is being built out.'
+    };
+  }
+
+  return { ...baseTile };
 }
 
 function getRegionTile(regionId, x, y) {
@@ -1221,6 +1253,7 @@ function slugifyWorld(value) {
 }
 
 function getTileIntelGroups(tile) {
+  if (tile.closedOff) return [];
   return [
     { key: 'herbs', label: 'Herb Signals', items: tile.herbs || [], chipClass: 'tag-herb' },
     { key: 'ores', label: 'Ore Veins', items: tile.ores || [], chipClass: 'tag-ore' },
@@ -1230,6 +1263,18 @@ function getTileIntelGroups(tile) {
 }
 
 function getTileAreaProfile(tile) {
+  if (tile.closedOff) {
+    return {
+      id: tile.areaId || tile.cityId || 'sealed-frontier',
+      name: tile.name || 'Sealed Frontier',
+      typeLabel: 'Sealed Route',
+      focusLabel: 'Early Access',
+      danger: tile.hazard ?? 0,
+      description: tile.earlyAccessNote || 'Survey stakes and ward beacons mark this route as temporarily sealed while the Ashgate starter frontier is being built out.',
+      summary: 'Playable space is currently focused on the Ashgate 3x3 starter frontier.'
+    };
+  }
+
   const areaCatalog = typeof GAME_CONSTANTS !== 'undefined'
     ? (GAME_CONSTANTS.explorationAreas || [])
     : [];
@@ -1359,6 +1404,10 @@ function toggleWorldView() {
     const x = _gameState?.tileX ?? 9;
     const y = _gameState?.tileY ?? 6;
     const tile = getRegionTile(regionId, x, y);
+    if (tile.closedOff) {
+      showToast('This route is sealed during early access.', 'warn');
+      return;
+    }
     if (tile.t !== 'M') { // Can't explore mountains
       enterLocalTileView(x, y, regionId);
     } else {
@@ -1374,6 +1423,8 @@ function toggleWorldView() {
 
 // ── Procedural mini-map generation ──────────────────────────────
 function getMapSizeForTile(tile) {
+  if (tile.localSize) return tile.localSize;
+
   // Determine mini-map size based on tile type and properties
   // Larger/denser areas = bigger maps
   const base = {
@@ -1514,6 +1565,7 @@ function generateLocalMap(tile, x, y, entryDir) {
   if (tile.t === 'C') {
     decorateLocalCityMap(tile, mapData);
   }
+  decorateStarterFrontierMap(tile, x, y, mapData);
   return mapData;
 }
 
@@ -1550,6 +1602,75 @@ function decorateLocalCityMap(tile, mapData) {
 
   features.forEach(feature => applyLocalMapFeature(mapData, feature.x, feature.y, feature));
   mapData.cityRoster = features.map(({ npcName, label, service, district, questHook }) => ({ npcName, label, service, district, questHook }));
+}
+
+function decorateStarterFrontierMap(tile, worldX, worldY, mapData) {
+  const starterOverlays = {
+    '8:5': [
+      { dx: 0, dy: 0, terrain: 'P', terrain_kind: 'market square', label: 'North Market Canopy', district: 'North Market Ward', npcName: 'Quartermaster Sia', service: 'guild', questHook: 'Supply runs for the Ashgate starter block' },
+      { dx: -4, dy: -2, terrain: 'C', terrain_kind: 'forge stall', label: 'Smelter Stall', district: 'North Market Ward', npcName: 'Smith Haro', service: 'blacksmith' },
+      { dx: 4, dy: -1, terrain: 'C', terrain_kind: 'scroll booth', label: 'Ledger Booths', district: 'North Market Ward', npcName: 'Archivist Pei', service: 'techniques' }
+    ],
+    '9:5': [
+      { dx: 0, dy: 0, terrain: 'P', terrain_kind: 'sect forecourt', label: 'Sect Petition Court', district: 'Sect Gate Approach', npcName: 'Outer Disciple Ren', service: 'sect', questHook: 'Petition Ashen Frontier Sect' },
+      { dx: -3, dy: 3, terrain: 'R', terrain_kind: 'spar lane', label: 'Trial Spar Lane', district: 'Sect Gate Approach', npcName: 'Showoff Jian', service: 'duel' },
+      { dx: 3, dy: -2, terrain: 'C', terrain_kind: 'screening desk', label: 'Screening Desk', district: 'Sect Gate Approach', npcName: 'Marshal Sen', service: 'plaza' }
+    ],
+    '10:5': [
+      { dx: 0, dy: 0, terrain: 'P', terrain_kind: 'archive lane', label: 'Scriptorium Annex', district: 'Scriptorium Row', npcName: 'Archivist Pei', service: 'techniques' },
+      { dx: -4, dy: 2, terrain: 'R', terrain_kind: 'rumor rail', label: 'Courier Lamp Desk', district: 'Scriptorium Row', npcName: 'Scout Ilya', service: 'rumor' },
+      { dx: 4, dy: -1, terrain: 'C', terrain_kind: 'commission table', label: 'Commission Table', district: 'Scriptorium Row', npcName: 'Broker Nuo', service: 'patron' }
+    ],
+    '8:6': [
+      { dx: 0, dy: 0, terrain: 'P', terrain_kind: 'dispatch yard', label: 'Guild Dispatch Yard', district: 'Guild Caravan Yard', npcName: 'Registrar Kesh', service: 'guild', questHook: 'Register with Iron Guild' },
+      { dx: -4, dy: -1, terrain: 'C', terrain_kind: 'weigh bridge', label: 'Weigh Bridge', district: 'Guild Caravan Yard', npcName: 'Quartermaster Sia', service: 'guild' },
+      { dx: 4, dy: 2, terrain: 'C', terrain_kind: 'wheelwright shed', label: 'Wheelwright Shed', district: 'Guild Caravan Yard', npcName: 'Smith Haro', service: 'blacksmith' }
+    ],
+    '10:6': [
+      { dx: 0, dy: 0, terrain: 'P', terrain_kind: 'broker circle', label: 'Lantern Broker Circle', district: 'Broker Lantern Ward', npcName: 'Broker Nuo', service: 'patron' },
+      { dx: -4, dy: -2, terrain: 'R', terrain_kind: 'rumor rail', label: 'Rumor Rail', district: 'Broker Lantern Ward', npcName: 'Scout Ilya', service: 'rumor' },
+      { dx: 4, dy: 2, terrain: 'C', terrain_kind: 'quiet ledger house', label: 'Quiet Ledger House', district: 'Broker Lantern Ward', npcName: 'Archivist Pei', service: 'techniques' }
+    ],
+    '8:7': [
+      { dx: 0, dy: 0, terrain: 'H', terrain_kind: 'terrace heart', label: 'Starter Herb Terrace', district: 'Reed Garden Terraces', npcName: 'Gardener Lio', questHook: 'Starter herbs rotate through these terraces at dawn.', resources: ['qi-grass', 'dustbloom'] },
+      { dx: -4, dy: 2, terrain: 'H', terrain_kind: 'drying rack', label: 'Drying Shed', district: 'Reed Garden Terraces', resources: ['charbloom'] },
+      { dx: 4, dy: -2, terrain: 'R', terrain_kind: 'gather watch', label: 'Gather Watch', district: 'Reed Garden Terraces', npcName: 'Quartermaster Sia' }
+    ],
+    '9:7': [
+      { dx: 0, dy: 0, terrain: 'Q', terrain_kind: 'discipline heart', label: 'Meditation Stones', district: 'Ashgate Training Grounds', npcName: 'Marshal Sen', service: 'plaza', questHook: 'Starter drills and party formation reads are staged here.' },
+      { dx: -4, dy: 1, terrain: 'R', terrain_kind: 'spar ring', label: 'Sparring Ring', district: 'Ashgate Training Grounds', npcName: 'Showoff Jian', service: 'duel' },
+      { dx: 4, dy: -2, terrain: 'C', terrain_kind: 'sect drill stand', label: 'Drill Stand', district: 'Ashgate Training Grounds', npcName: 'Outer Disciple Ren', service: 'sect' }
+    ],
+    '10:7': [
+      { dx: 0, dy: 0, terrain: 'S', terrain_kind: 'quarry face', label: 'Starter Quarry Face', district: 'Cinder Quarry Mouth', npcName: 'Smith Haro', service: 'blacksmith', questHook: 'Starter ore contracts are being staged off this cut.' },
+      { dx: -4, dy: -1, terrain: 'M', terrain_kind: 'lantern camp', label: 'Lantern Camp', district: 'Cinder Quarry Mouth', npcName: 'Registrar Kesh', service: 'guild' },
+      { dx: 4, dy: 2, terrain: 'S', terrain_kind: 'ore lift', label: 'Ore Lift', district: 'Cinder Quarry Mouth', resources: ['black-iron-ore', 'refined-iron-plate'] }
+    ]
+  };
+
+  const features = starterOverlays[`${worldX}:${worldY}`];
+  if (!features?.length) return;
+
+  const mid = Math.floor(mapData.width / 2);
+  const roster = [...(mapData.cityRoster || [])];
+
+  features.forEach(raw => {
+    const x = Math.max(1, Math.min(mapData.width - 2, mid + raw.dx));
+    const y = Math.max(1, Math.min(mapData.height - 2, mid + raw.dy));
+    const feature = { ...raw, x, y };
+    delete feature.dx;
+    delete feature.dy;
+    applyLocalMapFeature(mapData, feature.x, feature.y, feature);
+    roster.push({
+      npcName: feature.npcName,
+      label: feature.label,
+      service: feature.service,
+      district: feature.district,
+      questHook: feature.questHook
+    });
+  });
+
+  mapData.cityRoster = roster;
 }
 
 function getLocalMapSpawnPos(entryDir, mapWidth, mapHeight) {
@@ -1660,6 +1781,9 @@ function getAshgateRoster() {
 function closeInteractionModal() {
   const modal = document.getElementById('interaction-modal');
   if (!modal) return;
+  if (modal.dataset.modalOwner === 'app') {
+    delete modal.dataset.modalOwner;
+  }
   modal.classList.add('hidden');
   modal.setAttribute('aria-hidden', 'true');
 }
@@ -1672,6 +1796,7 @@ function isInteractionModalOpen() {
 function showInteractionModal(config) {
   const modal = document.getElementById('interaction-modal');
   if (!modal) return;
+  modal.dataset.modalOwner = 'app';
 
   const titleEl = document.getElementById('interaction-title');
   const subtitleEl = document.getElementById('interaction-subtitle');
@@ -1946,6 +2071,43 @@ function renderLocalInspector(tile, x, y) {
 
   grid.classList.add('is-inspector');
 
+  if (tile.closedOff) {
+    if (summary) summary.textContent = `${area.name} · Sealed during early access`;
+    grid.innerHTML = `
+      <div class="local-inspector-card compact">
+        <div class="local-inspector-label">Access</div>
+        <div class="local-inspector-value">Sealed Route</div>
+        <div class="local-inspector-copy">The Ashgate starter 3x3 is the active world slice while the wider frontier is being built out.</div>
+      </div>
+      <div class="local-inspector-card compact">
+        <div class="local-inspector-label">Current Focus</div>
+        <div class="local-inspector-value">Ashgate Borough Block</div>
+        <div class="local-inspector-copy">Guild yards, sect courts, markets, herb terraces, drills, and quarry routes are live here now.</div>
+      </div>
+      <div class="local-inspector-card compact">
+        <div class="local-inspector-label">Status</div>
+        <div class="local-inspector-value">Early Access Build</div>
+        <div class="local-inspector-copy">Return to the Ashgate block for current quests, player presence, and resource loops.</div>
+      </div>
+    `;
+
+    detail.innerHTML = `
+      <div class="world-site-detail-head compact">
+        <div>
+          <div class="tile-detail-kicker">Frontier Wardline</div>
+          <h4 class="world-site-detail-title">${escHtml(area.name)}</h4>
+        </div>
+        <span class="world-site-detail-glyph">⊘</span>
+      </div>
+      <div class="world-inline-meta">
+        <span class="tag-city">Early Access</span>
+        <span class="tag-city">Starter 3x3 Active</span>
+      </div>
+      <div class="world-empty-note">${escHtml(tile.earlyAccessNote || 'This route is temporarily sealed while the Ashgate starter frontier is being built out.')}</div>
+    `;
+    return;
+  }
+
   if (isLocalActive) {
     const subtile = getLocalPlayerTile();
     const action = getLocalActionForSubtile(tile, subtile);
@@ -2016,7 +2178,7 @@ function renderLocalInspector(tile, x, y) {
     </div>
     <div class="local-inspector-card compact">
       <div class="local-inspector-label">Hooks</div>
-      <div class="local-inspector-value">${escHtml(tile.cityId === 'ashgate' ? 'Guild, sect, patron, archive, vault, duel ring' : 'Resources, mobs, and terrain routes')}</div>
+      <div class="local-inspector-value">${escHtml(tile.localHooksText || (tile.cityId === 'ashgate' ? 'Guild, sect, patron, archive, vault, duel ring' : 'Resources, mobs, and terrain routes'))}</div>
       <div class="local-inspector-copy">Open local view to reach districts, NPCs, and resource lanes directly.</div>
     </div>
     <div class="local-inspector-card compact">
@@ -2787,7 +2949,8 @@ function renderWorldMapView(grid, wrap, TILE_SIZE) {
       const isAdj    = !isPlayer && Math.abs(x - px) <= 1 && Math.abs(y - py) <= 1;
       const isVis    = visited.has(vKey) || isPlayer;
       const inFog    = !isVis && !isAdj;
-      const canMove  = isAdj && tile.t !== 'M' && !isTraveling;
+      const isClosedOff = Boolean(tile.closedOff);
+      const canMove  = isAdj && tile.t !== 'M' && !isTraveling && !isClosedOff;
       const isSelected = selectedTile.x === x && selectedTile.y === y;
       const isTravelOrigin = travelRoute && x === travelRoute.fromX && y === travelRoute.fromY;
       const isTravelTarget = travelRoute && x === travelRoute.toX && y === travelRoute.toY;
@@ -2804,20 +2967,27 @@ function renderWorldMapView(grid, wrap, TILE_SIZE) {
       if (isSelected) cls += ' t-selected';
       if (isTravelOrigin) cls += ' t-travel-origin';
       if (isTravelTarget) cls += ' t-travel-target';
+      if (isClosedOff) cls += ' t-locked';
       if (tile.t === 'C' && tile.cityId) cls += ` city-${tile.cityId}`;
       if (tile.areaId) cls += ` area-${tile.areaId.split('-').slice(0,2).join('-')}`;
       if (visiblePlayer) cls += ' t-other-player';
       div.className = cls;
       if (isPlayer || visiblePlayer) {
+        const colocated = playersHere.map(player => player.name);
+        const colocatedLabel = colocated.length
+          ? `${colocated.slice(0, 2).join(', ')}${colocated.length > 2 ? ` +${colocated.length - 2}` : ''}`
+          : '';
         const label = isPlayer
-          ? `${_character?.name || 'You'}${playersHere.length ? ` +${playersHere.length}` : ''}`
+          ? `${_character?.name || 'You'}${colocatedLabel ? ` · ${colocatedLabel}` : ''}`
           : `${visiblePlayer.name}${playersHere.length > 1 ? ` +${playersHere.length - 1}` : ''}`;
         const glyph = isPlayer ? '⊕' : '◉';
         div.innerHTML = `<span class="tile-nameplate">${escHtml(label)}</span><span class="tile-glyph">${escHtml(glyph)}</span>`;
       } else {
         div.textContent = TILE_GLYPHS[tile.t] ?? '·';
       }
-      div.title = isPlayer
+      div.title = isClosedOff
+        ? `${tile.name || 'Sealed Frontier'} · Closed during early access while the Ashgate starter block is being built.`
+        : isPlayer
         ? `${_character?.name || 'You'}${playersHere.length ? ` + ${playersHere.length} nearby cultivator${playersHere.length > 1 ? 's' : ''}` : ''} · ${tile.name || TILE_TERRAIN_NAMES[tile.t] || 'Unknown terrain'}`
         : visiblePlayer
           ? `${visiblePlayer.name} · ${tile.name || TILE_TERRAIN_NAMES[tile.t] || 'Unknown terrain'}`
@@ -2825,9 +2995,9 @@ function renderWorldMapView(grid, wrap, TILE_SIZE) {
 
       if (canMove) {
         div.addEventListener('click', () => moveTile(x, y));
-      } else if (isVis && tile.t !== 'M') {
+      } else if ((isVis || isAdj) && tile.t !== 'M') {
         div.addEventListener('click', () => {
-          if (isPlayer && _travelReadyAt <= Date.now()) {
+          if (isPlayer && _travelReadyAt <= Date.now() && !isClosedOff) {
             enterLocalTileView(x, y, regionId);
             renderTileMap();
           } else {
@@ -2993,6 +3163,11 @@ async function moveTile(x, y) {
   const now = Date.now();
   const renderedRegionId = getRenderedRegionId(_gameState);
   const tile = getRegionTile(renderedRegionId, x, y);
+  if (tile.closedOff) {
+    showTileInfo(tile, x, y, { statusMessage: tile.earlyAccessNote || 'This route is sealed during early access while the Ashgate starter frontier is being built out.' });
+    showToast('This route is sealed during early access.', 'warn');
+    return;
+  }
   const fromX = _gameState?.tileX ?? 9;
   const fromY = _gameState?.tileY ?? 6;
   if (_travelReadyAt > now) {
@@ -3080,6 +3255,7 @@ function showTileInfo(tile, x, y, options = {}) {
   const terrainName = TILE_TERRAIN_NAMES[tile.t] ?? 'Unknown Terrain';
   const glyph = isPlayer ? '⊕' : (TILE_GLYPHS[tile.t] ?? '·');
   const playersOnTile = getVisiblePlayers().filter(player => player.regionId === regionId && player.tileX === x && player.tileY === y);
+  const isClosedOff = Boolean(tile.closedOff);
   const dangerLabel = tile.hazard
     ? (tile.hazard >= 6 ? 'Extreme threat' : tile.hazard >= 4 ? 'High threat' : tile.hazard >= 2 ? 'Mid threat' : 'Low threat')
     : 'Quiet ground';
@@ -3097,6 +3273,9 @@ function showTileInfo(tile, x, y, options = {}) {
       : isPlayer
         ? 'You are here. Read the tile, act, or open the local field.'
         : 'This tile is within scouting range. Inspect it before you commit movement.');
+  if (isClosedOff) {
+    statusMessage = options.statusMessage || tile.earlyAccessNote || 'This route is sealed during early access while the Ashgate starter frontier is being built out.';
+  }
   if (entryDirection && isPlayer && !isTraveling) {
     statusMessage += ` Entered from the ${entryDirection}.`;
   }
@@ -3105,31 +3284,32 @@ function showTileInfo(tile, x, y, options = {}) {
     `<span class="tag-city">${escHtml(`Coords ${x},${y}`)}</span>`,
     `<span class="tag-city">${escHtml(terrainName)}</span>`
   ];
+  if (isClosedOff) chips.push('<span class="tag-locked">Early Access Seal</span>');
   if (tile.hazard) chips.push(`<span class="tag-danger">⚠ ${escHtml(dangerLabel)}</span>`);
   if (tile.spiritDensity) chips.push(`<span class="tag-vein">Spirit ×${tile.spiritDensity}</span>`);
   if (tile.cityId) chips.push('<span class="tag-city">City Anchor</span>');
   if (playersOnTile.length) chips.push(`<span class="tag-online">${escHtml(`${playersOnTile.length} nearby cultivator${playersOnTile.length > 1 ? 's' : ''}`)}</span>`);
 
   const actionButtons = [];
-  if (tile.areaId) {
+  if (!isClosedOff && tile.areaId) {
     actionButtons.push(`<button type="button" class="btn-sm btn-primary" onclick="openZoneForArea('${tile.areaId}', ${x}, ${y})">Area Intel</button>`);
   }
-  if (tile.herbs?.length) {
+  if (!isClosedOff && tile.herbs?.length) {
     actionButtons.push(`<button type="button" class="btn-sm ${isPlayer && !isTraveling ? 'btn-primary' : 'btn-ghost'}" onclick="${isPlayer && !isTraveling ? `performTileFieldAction('herbs', ${x}, ${y})` : `previewWorldAction('herbs', ${x}, ${y})`}">${isPlayer && !isTraveling ? 'Forage' : 'Herb Routes'}</button>`);
   }
-  if (tile.ores?.length) {
+  if (!isClosedOff && tile.ores?.length) {
     actionButtons.push(`<button type="button" class="btn-sm ${isPlayer && !isTraveling ? 'btn-primary' : 'btn-ghost'}" onclick="${isPlayer && !isTraveling ? `performTileFieldAction('ores', ${x}, ${y})` : `previewWorldAction('ores', ${x}, ${y})`}">${isPlayer && !isTraveling ? 'Mine' : 'Ore Survey'}</button>`);
   }
-  if (tile.mobs?.length) {
+  if (!isClosedOff && tile.mobs?.length) {
     actionButtons.push(`<button type="button" class="btn-sm ${isPlayer && !isTraveling ? 'btn-primary' : 'btn-ghost'}" onclick="${isPlayer && !isTraveling ? `performTileFieldAction('mobs', ${x}, ${y})` : `previewWorldAction('mobs', ${x}, ${y})`}">${isPlayer && !isTraveling ? 'Hunt' : 'Track Threats'}</button>`);
   }
-  if (tile.drops?.length || tile.t === 'X') {
+  if (!isClosedOff && (tile.drops?.length || tile.t === 'X')) {
     actionButtons.push(`<button type="button" class="btn-sm ${isPlayer && !isTraveling ? 'btn-primary' : 'btn-ghost'}" onclick="${isPlayer && !isTraveling ? `performTileFieldAction('relic', ${x}, ${y})` : tile.areaId ? `openZoneForArea('${tile.areaId}', ${x}, ${y})` : `focusWorldTile(${x}, ${y})`}">${isPlayer && !isTraveling ? 'Scavenge' : 'Relic Intel'}</button>`);
   }
-  if (tile.spiritDensity) {
+  if (!isClosedOff && tile.spiritDensity) {
     actionButtons.push(`<button type="button" class="btn-sm ${isPlayer && !isTraveling ? 'btn-primary' : 'btn-ghost'}" onclick="${isPlayer && !isTraveling ? `performTileFieldAction('spirit', ${x}, ${y})` : `previewWorldAction('spirit', ${x}, ${y})`}">${isPlayer && !isTraveling ? 'Resonate' : 'Qi Survey'}</button>`);
   }
-  if (isPlayer && !isTraveling) {
+  if (!isClosedOff && isPlayer && !isTraveling) {
     actionButtons.unshift(`<button type="button" class="btn-sm btn-primary" onclick="toggleWorldView()">${_viewMode === 'local' ? 'Back to World Map' : 'Open Local Field'}</button>`);
   }
 
@@ -3147,6 +3327,12 @@ function showTileInfo(tile, x, y, options = {}) {
       </div>
     `;
   }).join('');
+
+  const fieldNoteMarkup = isClosedOff
+    ? '<div class="world-empty-note">This route is sealed while the playable world is focused on Ashgate and its surrounding starter 3x3.</div>'
+    : intelMarkup
+      ? `<div class="tile-intel-inline-list">${intelMarkup}</div>`
+      : '<div class="world-empty-note">No obvious herbs, veins, drops, or roaming packs are surfacing on this exact tile yet.</div>';
 
   bar.dataset.traveling = isPlayer && isTraveling ? '1' : '0';
   bar.innerHTML = `
@@ -3181,7 +3367,7 @@ function showTileInfo(tile, x, y, options = {}) {
         </div>
       </div>
 
-      ${intelMarkup ? `<div class="tile-intel-inline-list">${intelMarkup}</div>` : '<div class="world-empty-note">No obvious herbs, veins, drops, or roaming packs are surfacing on this exact tile yet.</div>'}
+      ${fieldNoteMarkup}
 
       ${tile.afkable ? '<div class="tag-afk">⏳ Repeatable field loop marked on this tile</div>' : ''}
       ${actionButtons.length ? `<div class="world-action-row">${actionButtons.join('')}</div>` : ''}
@@ -3664,7 +3850,7 @@ function checkAdminAccess() {
 
 function setupAdminPanel() {
   // Tab switching
-  ['features', 'players', 'npcs', 'events', 'audit', 'stats'].forEach(tab => {
+  ['features', 'players', 'npcs', 'events', 'content', 'audit', 'stats'].forEach(tab => {
     document.getElementById(`admin-tab-${tab}`)?.addEventListener('click', () => switchAdminTab(tab));
   });
 
@@ -3680,13 +3866,17 @@ function setupAdminPanel() {
   // Event spawn
   document.getElementById('admin-event-spawn')?.addEventListener('click', spawnEvent);
 
+  // Content authoring
+  document.getElementById('admin-item-save')?.addEventListener('click', saveAdminItemTemplate);
+  document.getElementById('admin-node-save')?.addEventListener('click', saveAdminZoneNode);
+
   // Audit + stats refresh
   document.getElementById('admin-audit-refresh')?.addEventListener('click', loadAdminAudit);
   document.getElementById('admin-stats-refresh')?.addEventListener('click', loadAdminStats);
 }
 
 function switchAdminTab(tab) {
-  ['features', 'players', 'npcs', 'events', 'audit', 'stats'].forEach(t => {
+  ['features', 'players', 'npcs', 'events', 'content', 'audit', 'stats'].forEach(t => {
     document.getElementById(`admin-tab-${t}`)?.classList.toggle('active', t === tab);
     document.getElementById(`admin-${t}-panel`)?.classList.toggle('hidden', t !== tab);
   });
@@ -3694,6 +3884,7 @@ function switchAdminTab(tab) {
   if (tab === 'audit') loadAdminAudit();
   if (tab === 'stats') loadAdminStats();
   if (tab === 'events') loadAdminEvents();
+  if (tab === 'content') loadAdminContent();
 }
 
 async function loadAdminFeatures() {
@@ -3803,6 +3994,117 @@ async function loadAdminStats() {
   display.innerHTML = `<table class="info-table">` +
     Object.entries(s).map(([k, v]) => `<tr><td>${escHtml(k)}</td><td><strong>${escHtml(String(v))}</strong></td></tr>`).join('') +
     `</table>`;
+}
+
+async function loadAdminContent() {
+  const [itemResp, nodeResp] = await Promise.all([
+    API.get('/api/admin/content/items'),
+    API.get('/api/admin/content/nodes')
+  ]);
+
+  const itemList = document.getElementById('admin-item-list');
+  const nodeList = document.getElementById('admin-node-list');
+  if (itemList) {
+    if (!itemResp.ok) {
+      itemList.innerHTML = `<p class="text-muted">${escHtml(itemResp.data?.error || 'Unable to load items')}</p>`;
+    } else {
+      const items = itemResp.data.items || [];
+      itemList.innerHTML = items.slice(0, 40).map(item => `
+        <div class="feature-row">
+          <span class="feature-id">${escHtml(item.id)}</span>
+          <span class="feature-status-badge">${escHtml(item.item_type || 'item')}</span>
+          <span class="text-muted">${escHtml(item.name || '')}</span>
+        </div>
+      `).join('') || '<p class="text-muted">No item templates yet.</p>';
+    }
+  }
+
+  if (nodeList) {
+    if (!nodeResp.ok) {
+      nodeList.innerHTML = `<p class="text-muted">${escHtml(nodeResp.data?.error || 'Unable to load nodes')}</p>`;
+    } else {
+      const nodes = nodeResp.data.nodes || [];
+      nodeList.innerHTML = nodes.slice(0, 40).map(node => `
+        <div class="feature-row">
+          <span class="feature-id">${escHtml(node.id)}</span>
+          <span class="feature-status-badge">${escHtml(node.node_type || 'node')}</span>
+          <span class="text-muted">${escHtml(node.zone_name || node.zone_id || '')}</span>
+        </div>
+      `).join('') || '<p class="text-muted">No zone nodes yet.</p>';
+    }
+  }
+}
+
+async function saveAdminItemTemplate() {
+  const id = document.getElementById('admin-item-id')?.value.trim();
+  const name = document.getElementById('admin-item-name')?.value.trim();
+  const item_type = document.getElementById('admin-item-type')?.value.trim();
+  const rarity = document.getElementById('admin-item-rarity')?.value.trim() || 'common';
+  const stack_max = parseInt(document.getElementById('admin-item-stack')?.value || '99', 10);
+  const realm_req = parseInt(document.getElementById('admin-item-realm')?.value || '0', 10);
+
+  if (!id || !name || !item_type) {
+    showToast('Item id, name, and type are required.', 'error');
+    return;
+  }
+
+  const r = await API.post('/api/admin/content/items', {
+    id,
+    name,
+    item_type,
+    rarity,
+    stack_max: Number.isFinite(stack_max) ? stack_max : 99,
+    realm_req: Number.isFinite(realm_req) ? realm_req : 0
+  });
+
+  if (!r.ok) {
+    showToast(r.data?.error || 'Failed to save item template.', 'error');
+    return;
+  }
+
+  showToast('Item template saved.', 'ok');
+  loadAdminContent();
+}
+
+async function saveAdminZoneNode() {
+  const id = document.getElementById('admin-node-id')?.value.trim();
+  const zone_id = document.getElementById('admin-node-zone')?.value.trim();
+  const name = document.getElementById('admin-node-name')?.value.trim();
+  const node_type = document.getElementById('admin-node-type')?.value.trim();
+  const realm_req = parseInt(document.getElementById('admin-node-realm')?.value || '0', 10);
+  const respawn_hours = parseInt(document.getElementById('admin-node-respawn')?.value || '6', 10);
+
+  const dropId = document.getElementById('admin-node-drop-id')?.value.trim();
+  const dropMin = parseInt(document.getElementById('admin-node-drop-min')?.value || '1', 10);
+  const dropMax = parseInt(document.getElementById('admin-node-drop-max')?.value || '2', 10);
+  const dropChance = parseFloat(document.getElementById('admin-node-drop-chance')?.value || '0.65');
+
+  if (!id || !zone_id || !name || !node_type) {
+    showToast('Node id, zone id, name, and type are required.', 'error');
+    return;
+  }
+
+  const loot_table = dropId
+    ? [{ id: dropId, qty: [Number.isFinite(dropMin) ? dropMin : 1, Number.isFinite(dropMax) ? dropMax : 2], chance: Number.isFinite(dropChance) ? Math.max(0, Math.min(1, dropChance)) : 0.65 }]
+    : [];
+
+  const r = await API.post('/api/admin/content/nodes', {
+    id,
+    zone_id,
+    name,
+    node_type,
+    realm_req: Number.isFinite(realm_req) ? realm_req : 0,
+    respawn_hours: Number.isFinite(respawn_hours) ? respawn_hours : 6,
+    loot_table
+  });
+
+  if (!r.ok) {
+    showToast(r.data?.error || 'Failed to save node.', 'error');
+    return;
+  }
+
+  showToast('Resource node saved.', 'ok');
+  loadAdminContent();
 }
 
 // ── Inline admin helpers ───────────────────────────────────────

@@ -4410,6 +4410,9 @@ function closePanel(node) {
 
 function renderInteractionPanel(state) {
   const panel = document.getElementById("interaction-modal");
+  if (panel?.dataset.modalOwner === "app") {
+    return;
+  }
   const title = document.getElementById("interaction-title");
   const subtitle = document.getElementById("interaction-subtitle");
   const text = document.getElementById("interaction-text");

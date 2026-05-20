@@ -404,6 +404,7 @@
            <button class="btn-sm" id="admin-tab-players" type="button">Players</button>
            <button class="btn-sm" id="admin-tab-npcs" type="button">NPCs</button>
            <button class="btn-sm" id="admin-tab-events" type="button">Events</button>
+           <button class="btn-sm" id="admin-tab-content" type="button">Content</button>
            <button class="btn-sm" id="admin-tab-audit" type="button">Audit Log</button>
            <button class="btn-sm" id="admin-tab-stats" type="button">Stats</button>
          </div>
@@ -449,6 +450,54 @@
              <input type="text" id="admin-event-desc" placeholder="Description" class="form-input" style="flex:2" />
              <input type="number" id="admin-event-duration" placeholder="Hours" value="24" class="form-input" style="width:80px" />
              <button class="btn-sm btn-primary" id="admin-event-spawn" type="button">Spawn</button>
+           </div>
+         </div>
+
+         <div class="card mt-md hidden" id="admin-content-panel">
+           <h3>Content Authoring</h3>
+           <p class="text-muted">Create or update item templates and resource nodes without editing code.</p>
+
+           <h4 class="mt-sm">Item Template</h4>
+           <div class="form-row">
+             <input type="text" id="admin-item-id" placeholder="item id (e.g. cinder-ore)">
+             <input type="text" id="admin-item-name" placeholder="Display name">
+             <input type="text" id="admin-item-type" placeholder="Type (crafting-mat, weapon, etc.)">
+           </div>
+           <div class="form-row mt-sm">
+             <input type="text" id="admin-item-rarity" placeholder="rarity" value="common">
+             <input type="number" id="admin-item-stack" placeholder="stack" value="99">
+             <input type="number" id="admin-item-realm" placeholder="realm req" value="0">
+             <button class="btn-sm btn-primary" id="admin-item-save" type="button">Save Item</button>
+           </div>
+
+           <h4 class="mt-sm">Resource Node</h4>
+           <div class="form-row">
+             <input type="text" id="admin-node-id" placeholder="node id">
+             <input type="text" id="admin-node-zone" placeholder="zone id (e.g. ashgate-outskirts)">
+             <input type="text" id="admin-node-name" placeholder="Node display name">
+           </div>
+           <div class="form-row mt-sm">
+             <input type="text" id="admin-node-type" placeholder="node type (spirit-herb, beast-lair, etc.)">
+             <input type="number" id="admin-node-realm" placeholder="realm req" value="0">
+             <input type="number" id="admin-node-respawn" placeholder="respawn hours" value="6">
+           </div>
+           <div class="form-row mt-sm">
+             <input type="text" id="admin-node-drop-id" placeholder="drop item id">
+             <input type="number" id="admin-node-drop-min" placeholder="min qty" value="1">
+             <input type="number" id="admin-node-drop-max" placeholder="max qty" value="2">
+             <input type="number" id="admin-node-drop-chance" placeholder="chance (0-1)" step="0.05" value="0.65">
+             <button class="btn-sm btn-primary" id="admin-node-save" type="button">Save Node</button>
+           </div>
+
+           <div class="admin-content-grid mt-sm">
+             <div>
+               <h4>Recent Item Templates</h4>
+               <div id="admin-item-list" class="feature-list"></div>
+             </div>
+             <div>
+               <h4>Recent Resource Nodes</h4>
+               <div id="admin-node-list" class="feature-list"></div>
+             </div>
            </div>
          </div>
 
