@@ -1897,14 +1897,101 @@ button.btn-locked {
 .node-cd-label { font-size:.78rem;color:var(--ink-2);font-style:italic; }
 
 /* ── Tile-based World Map ─────────────────────────────────── */
+.world-shell {
+  display:grid;
+  grid-template-columns:minmax(0, 1.7fr) minmax(320px, .9fr);
+  gap:1rem;
+  align-items:start;
+}
+.world-map-column,
+.world-sidebar {
+  display:flex;
+  flex-direction:column;
+  gap:.8rem;
+}
+.world-status-card,
+.tile-info-panel {
+  border:1px solid rgba(201,162,50,.18);
+  border-radius:8px;
+  background:
+    linear-gradient(180deg, rgba(232,223,192,.035), rgba(13,11,8,.88)),
+    radial-gradient(circle at top left, rgba(201,162,50,.07), transparent 42%);
+  box-shadow: inset 0 1px 0 rgba(201,162,50,.12), 0 18px 34px rgba(0,0,0,.18);
+}
+.world-status-card {
+  padding:.8rem .9rem;
+}
+.world-stat-grid {
+  display:grid;
+  grid-template-columns:repeat(4, minmax(0, 1fr));
+  gap:.75rem;
+}
+.world-stat {
+  min-width:0;
+}
+.world-stat-label {
+  display:block;
+  font-size:.68rem;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--ink-2);
+  margin-bottom:.18rem;
+}
+.world-stat strong {
+  display:block;
+  font-size:.92rem;
+  color:var(--ink-0);
+}
+.world-nearby-row {
+  display:flex;
+  flex-wrap:wrap;
+  gap:.45rem;
+  margin-top:.8rem;
+}
+.world-nearby-chip {
+  appearance:none;
+  border:1px solid rgba(201,162,50,.18);
+  background:rgba(255,255,255,.03);
+  color:var(--ink-1);
+  border-radius:999px;
+  padding:.38rem .65rem;
+  display:inline-flex;
+  align-items:center;
+  gap:.45rem;
+  cursor:pointer;
+  transition:border-color .12s ease, background-color .12s ease, transform .12s ease;
+}
+.world-nearby-chip:hover {
+  border-color:rgba(201,162,50,.55);
+  background:rgba(201,162,50,.08);
+  transform:translateY(-1px);
+}
+.world-nearby-dir {
+  font-size:.66rem;
+  color:var(--gold);
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+.world-nearby-name {
+  max-width:150px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.world-nearby-glyph {
+  color:var(--paper);
+}
 .tile-map-wrap {
   position: relative;
   overflow: hidden;
   height: min(58vh, 520px);
   border: 1px solid rgba(201,162,50,.2);
   border-radius: 8px;
-  background: #06080b;
-  margin-bottom: .6rem;
+  background:
+    radial-gradient(circle at 18% 14%, rgba(201,162,50,.08), transparent 20%),
+    radial-gradient(circle at 82% 18%, rgba(58,125,96,.08), transparent 18%),
+    linear-gradient(180deg, #0b0d11 0%, #050608 100%);
+  box-shadow: inset 0 1px 0 rgba(201,162,50,.12), inset 0 -18px 45px rgba(0,0,0,.22);
 }
 .tile-grid {
   display: grid;
@@ -1923,18 +2010,19 @@ button.btn-locked {
   box-sizing: border-box;
   user-select: none;
   position: relative;
+  transition: transform .12s ease, border-color .12s ease, box-shadow .16s ease, filter .16s ease;
 }
 .t-M   { background:#0c0c0c; color:#252525; cursor:not-allowed; border-color:#141414; }
 .t-dot { background:#09090b; color:#1c1b18; border-color:#101010; }
-.t-R   { background:#0f0d08; color:#4a3c12; border-color:#1c1808; }
-.t-C   { background:#14100a; color:#c9a232; border-color:rgba(201,162,50,.28); font-size:.88rem; font-weight:700; }
-.t-W   { background:#080e06; color:#3a5a2a; border-color:#0e160b; }
-.t-F   { background:#060d06; color:#254a22; border-color:#0a130a; }
-.t-X   { background:#0e0a05; color:#7d5a2a; border-color:#1c1208; }
-.t-V   { background:#060d11; color:#3a7d60; border-color:#0a1d22; }
-.t-K   { background:#0d0b08; color:#6a5230; border-color:#1c1510; } /* cave — dark tan */
-.t-H   { background:#060d08; color:#3a7455; border-color:#0a1a0e; } /* herb — jade-green */
-.t-B   { background:#0f0606; color:#7d2a2a; border-color:#1c0a0a; } /* beast lair — blood red */
+.t-R   { background:#0f0d08; color:#4a3c12; border-color:#1c1808; background-image:linear-gradient(90deg, transparent 18%, rgba(201,162,50,.1) 50%, transparent 82%); }
+.t-C   { background:#14100a; color:#c9a232; border-color:rgba(201,162,50,.28); font-size:.88rem; font-weight:700; box-shadow:inset 0 0 12px rgba(201,162,50,.08); }
+.t-W   { background:#080e06; color:#3a5a2a; border-color:#0e160b; background-image:radial-gradient(circle at center, rgba(58,125,75,.08), transparent 72%); }
+.t-F   { background:#060d06; color:#254a22; border-color:#0a130a; background-image:radial-gradient(circle at 40% 40%, rgba(58,125,75,.08), transparent 70%); }
+.t-X   { background:#0e0a05; color:#7d5a2a; border-color:#1c1208; background-image:linear-gradient(135deg, rgba(201,162,50,.08), transparent 65%); }
+.t-V   { background:#060d11; color:#3a7d60; border-color:#0a1d22; box-shadow:inset 0 0 10px rgba(58,125,96,.14); }
+.t-K   { background:#0d0b08; color:#6a5230; border-color:#1c1510; background-image:linear-gradient(180deg, rgba(120,90,50,.12), transparent); } /* cave — dark tan */
+.t-H   { background:#060d08; color:#3a7455; border-color:#0a1a0e; box-shadow:inset 0 0 10px rgba(58,125,75,.1); } /* herb — jade-green */
+.t-B   { background:#0f0606; color:#7d2a2a; border-color:#1c0a0a; box-shadow:inset 0 0 10px rgba(192,72,72,.12); } /* beast lair — blood red */
 .t-fog { opacity:.06; pointer-events:none; }
 /* Visited tiles: appreciably brighter than fog but still atmospheric */
 .t-visited { filter: brightness(1.55) saturate(1.2); }
@@ -1943,6 +2031,7 @@ button.btn-locked {
 .t-adj { cursor:pointer; border-color:rgba(201,162,50,.35); }
 .t-adj:hover { background-color:rgba(201,162,50,.08); border-color:rgba(201,162,50,.7); }
 .t-adj-vis { border-color:rgba(201,162,50,.15); }
+.t-selected { border-color:rgba(232,223,192,.58); box-shadow:inset 0 0 0 1px rgba(232,223,192,.2), 0 0 0 1px rgba(201,162,50,.18); transform:translateY(-1px); }
 
 /* ── City-specific tile colors ── */
 .city-ember        { background:#1a0a02; color:#e07530; border-color:rgba(224,117,48,.4); }
@@ -1971,17 +2060,133 @@ button.btn-locked {
   position:absolute; bottom:6px; right:8px;
   display:flex; gap:.5rem; flex-wrap:wrap;
   font-size:.7rem; color:var(--ink-2);
-  background:rgba(6,8,11,.88); padding:3px 7px;
+  background:rgba(6,8,11,.9); padding:4px 8px;
   border-radius:4px; border:1px solid rgba(255,255,255,.07);
 }
-.tile-info-bar {
-  padding:.5rem .75rem;
-  font-size:.85rem; color:var(--ink-1);
+.tile-info-panel {
+  padding:1rem;
+  min-height:100%;
+}
+.tile-detail {
+  display:flex;
+  flex-direction:column;
+  gap:.85rem;
+}
+.tile-detail-header {
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:.8rem;
+}
+.tile-detail-kicker {
+  font-size:.72rem;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:var(--gold);
+  margin-bottom:.2rem;
+}
+.tile-detail-title {
+  margin:0;
+  font-size:1.1rem;
+}
+.tile-detail-meta {
+  display:flex;
+  flex-wrap:wrap;
+  gap:.35rem;
+  margin-top:.35rem;
+}
+.tile-detail-glyph {
+  min-width:46px;
+  height:46px;
+  border-radius:8px;
+  border:1px solid rgba(201,162,50,.18);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:1.2rem;
+  color:var(--paper);
+  background:rgba(255,255,255,.03);
+}
+.tile-detail-status {
+  border:1px solid rgba(201,162,50,.12);
+  border-radius:6px;
+  background:rgba(255,255,255,.03);
+  color:var(--ink-1);
+  padding:.7rem .8rem;
+  line-height:1.55;
+}
+.tile-detail-status.is-live {
+  border-color:rgba(201,162,50,.34);
+  color:var(--ink-0);
+  background:linear-gradient(90deg, rgba(201,162,50,.1), rgba(255,255,255,.02));
+}
+.tile-detail-grid {
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:.7rem;
+}
+.tile-section-card {
   border:1px solid rgba(201,162,50,.12);
   border-radius:6px;
   background:rgba(255,255,255,.02);
-  min-height:2.4rem;
-  display:flex; align-items:center; flex-wrap:wrap; gap:.4rem;
+  padding:.75rem;
+}
+.tile-section-label {
+  font-size:.72rem;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--ink-2);
+  margin-bottom:.2rem;
+}
+.tile-section-value {
+  font-weight:700;
+  color:var(--ink-0);
+  margin-bottom:.2rem;
+}
+.tile-section-copy {
+  margin:0;
+  color:var(--ink-1);
+  line-height:1.55;
+}
+.tile-intel-list {
+  display:flex;
+  flex-direction:column;
+  gap:.55rem;
+}
+.tile-intel-row {
+  border:1px solid rgba(201,162,50,.12);
+  border-radius:6px;
+  padding:.6rem .7rem;
+  background:rgba(255,255,255,.02);
+}
+.tile-intel-label {
+  font-size:.76rem;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+  color:var(--gold);
+  margin-bottom:.35rem;
+}
+.tile-intel-copy {
+  display:flex;
+  flex-wrap:wrap;
+  gap:.3rem;
+}
+.world-action-row {
+  display:flex;
+  flex-wrap:wrap;
+  gap:.45rem;
+}
+.tile-detail-footnote,
+.world-empty-note {
+  border:1px dashed rgba(201,162,50,.18);
+  border-radius:6px;
+  padding:.7rem .8rem;
+  color:var(--ink-2);
+  line-height:1.55;
+  background:rgba(255,255,255,.02);
+}
+.tile-area-report .node-card-local {
+  margin-top:.35rem;
 }
 .tag-danger { background:rgba(207,74,63,.18); color:#e05050; padding:.1rem .35rem; border-radius:4px; font-size:.78rem; }
 .tag-city   { background:rgba(201,162,50,.18); color:#c9a232; padding:.1rem .35rem; border-radius:4px; font-size:.78rem; }
@@ -2023,6 +2228,25 @@ button.btn-locked {
 .audit-time { font-size:.76rem;color:var(--ink-2);min-width:140px; }
 .admin-table { width:100%;border-collapse:collapse;font-size:.84rem; }
 .admin-table th,.admin-table td { padding:.35rem .6rem;border-bottom:1px solid var(--border);text-align:left; }
+
+@media (max-width: 980px) {
+  .world-shell {
+    grid-template-columns:1fr;
+  }
+  .world-stat-grid {
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .world-stat-grid,
+  .tile-detail-grid {
+    grid-template-columns:1fr;
+  }
+  .tile-map-wrap {
+    height:min(50vh, 430px);
+  }
+}
 .admin-table th { color:var(--ink-2);font-weight:600; }
 
 .info-table { width:100%;border-collapse:collapse;font-size:.88rem; }

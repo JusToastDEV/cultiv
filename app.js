@@ -56,6 +56,7 @@ let _cdAnimFrames = {};
 let _guestMode = false;
 let _travelReadyAt = 0;      // epoch ms when next tile move is allowed
 let _travelTimerInterval = null; // setInterval handle for travel countdown
+let _selectedWorldTile = null;
 
 // Realm names for display
 const REALM_NAMES = [
@@ -1156,20 +1157,191 @@ function getRegionTile(regionId, x, y) {
   return { t:'M' }; // other regions fully fogged for now
 }
 
+function getRenderedRegionId(state = _gameState) {
+  const regionId = state?.regionId ?? 'ashen-frontier';
+  return regionId === 'ashen-frontier' ? regionId : 'ashen-frontier';
+}
+
+function titleizeSlug(value) {
+  return String(value || '')
+    .split('-')
+    .filter(Boolean)
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function slugifyWorld(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function getTileIntelGroups(tile) {
+  return [
+    { key: 'herbs', label: 'Herb Signals', items: tile.herbs || [], chipClass: 'tag-herb' },
+    { key: 'ores', label: 'Ore Veins', items: tile.ores || [], chipClass: 'tag-ore' },
+    { key: 'mobs', label: 'Roaming Threats', items: tile.mobs || [], chipClass: 'tag-mob' },
+    { key: 'drops', label: 'Possible Drops', items: tile.drops || [], chipClass: 'tag-drop' }
+  ].filter(group => group.items.length > 0);
+}
+
+function getTileAreaProfile(tile) {
+  const areaCatalog = typeof GAME_CONSTANTS !== 'undefined'
+    ? (GAME_CONSTANTS.explorationAreas || [])
+    : [];
+  const catalogArea = tile.areaId ? areaCatalog.find(area => area.id === tile.areaId) : null;
+
+  let inferredType = 'frontier';
+  if (tile.t === 'C') inferredType = 'city';
+  else if (tile.t === 'X') inferredType = 'ruins';
+  else if (tile.t === 'K') inferredType = 'mine';
+  else if (tile.t === 'H') inferredType = 'herb-grove';
+  else if (tile.t === 'B') inferredType = 'lair';
+  else if (tile.t === 'V') inferredType = 'spirit-vein';
+  else if (tile.t === 'F') inferredType = 'forest';
+  else if (tile.t === 'W') inferredType = 'wilderness';
+  else if (tile.t === 'R') inferredType = 'road';
+
+  let inferredFocus = 'exploration';
+  if (tile.herbs?.length) inferredFocus = 'herb';
+  else if (tile.ores?.length) inferredFocus = 'ore';
+  else if (tile.mobs?.length) inferredFocus = 'beasts';
+  else if (tile.drops?.length) inferredFocus = 'relic';
+  else if (tile.spiritDensity) inferredFocus = 'spirit';
+  else if (tile.cityId) inferredFocus = 'trade';
+
+  const detailBits = [];
+  if (tile.hazard) detailBits.push(`hazard ${tile.hazard}`);
+  if (tile.spiritDensity) detailBits.push(`spirit density ×${tile.spiritDensity}`);
+  if (tile.afkable) detailBits.push('repeatable field loop');
+  if (!detailBits.length) detailBits.push('no dense node cluster mapped yet');
+
+  const flavorBits = [];
+  if (tile.herbs?.length) flavorBits.push('wild herbs are surfacing');
+  if (tile.ores?.length) flavorBits.push('mineral seams are visible');
+  if (tile.mobs?.length) flavorBits.push('predator trails cut through the ground');
+  if (tile.drops?.length) flavorBits.push('broken relic traces remain');
+  if (tile.cityId) flavorBits.push('civil traffic and services anchor the tile');
+  if (tile.spiritDensity) flavorBits.push('ambient qi gathers here');
+
+  return {
+    id: tile.areaId || tile.cityId || inferredType,
+    name: catalogArea?.name || tile.name || TILE_TERRAIN_NAMES[tile.t] || 'Unknown Ground',
+    typeLabel: titleizeSlug(catalogArea?.type || inferredType),
+    focusLabel: titleizeSlug(catalogArea?.focus || inferredFocus),
+    danger: catalogArea?.danger ?? tile.hazard ?? 0,
+    description: flavorBits.length
+      ? `${flavorBits.join(', ')}.`
+      : 'Quiet ground for now, with only light signs of recent movement.',
+    summary: `Primary read: ${detailBits.join(' · ')}.`
+  };
+}
+
+function countVisitedTiles(visited, regionId) {
+  let count = 0;
+  for (const key of visited) {
+    if (key.startsWith(`${regionId}:`)) count += 1;
+  }
+  return count;
+}
+
+function focusWorldTile(x, y) {
+  const regionId = getRenderedRegionId(_gameState);
+  const tile = getRegionTile(regionId, x, y);
+  showTileInfo(tile, x, y);
+}
+
+function previewWorldAction(kind, x, y) {
+  const regionId = getRenderedRegionId(_gameState);
+  const tile = getRegionTile(regionId, x, y);
+  const profiles = {
+    herbs: tile.herbs?.length
+      ? `You trace the herb routes here: ${tile.herbs.map(titleizeSlug).join(', ')}. Harvest actions are the next backend pass, but this tile is already marked as a live herb pocket.`
+      : 'No active herb signals are surfacing on this tile.',
+    ores: tile.ores?.length
+      ? `The exposed seams suggest ${tile.ores.map(titleizeSlug).join(', ')}. Mining hooks are next, but this tile is already flagged as a workable vein.`
+      : 'No exposed ore seams are visible here.',
+    mobs: tile.mobs?.length
+      ? `Beast sign is heavy here: ${tile.mobs.map(titleizeSlug).join(', ')}. Encounter hooks still need a server pass, but this tile is already tagged for hostile activity.`
+      : 'No active beast trails are obvious right now.',
+    spirit: tile.spiritDensity
+      ? `Qi gathers around this tile at density ×${tile.spiritDensity}. Dedicated location-based cultivation bonuses are next, but this is already a meaningful spiritual node.`
+      : 'Ambient qi is flat here compared with nearby spirit nodes.',
+    city: tile.cityId
+      ? `${titleizeSlug(tile.cityId)} is currently acting as a service anchor. The full navigable city-grid rework is next, but this tile is already the settlement access point.`
+      : 'This tile is not currently mapped as a city anchor.'
+  };
+  showTileInfo(tile, x, y, { statusMessage: profiles[kind] || 'You study the terrain and mark new field notes.' });
+}
+
+function renderWorldHud(regionId, px, py, visited) {
+  const posEl = document.getElementById('world-current-position');
+  const areaEl = document.getElementById('world-current-area');
+  const travelEl = document.getElementById('world-travel-state');
+  const exploredEl = document.getElementById('world-explored-count');
+  const nearbyEl = document.getElementById('world-nearby');
+
+  const currentTile = getRegionTile(regionId, px, py);
+  const currentArea = getTileAreaProfile(currentTile);
+  const regionName = ({
+    'ashen-frontier': 'Ashen Frontier',
+    'jade-delta': 'Jade Delta',
+    'iron-wilds': 'Iron Wilds',
+    'void-rift': 'Void Rift',
+    'celestial-plateau': 'Celestial Plateau',
+    'sovereign-wastes': 'Sovereign Wastes'
+  })[regionId] ?? titleizeSlug(regionId);
+  const travelRem = Math.max(0, _travelReadyAt - Date.now());
+
+  if (posEl) posEl.textContent = `${regionName} · ${px},${py}`;
+  if (areaEl) areaEl.textContent = currentArea.name;
+  if (travelEl) {
+    travelEl.textContent = travelRem > 0
+      ? `Traveling · ${Math.ceil(travelRem / 1000)}s`
+      : 'Movement window open';
+  }
+  if (exploredEl) exploredEl.textContent = `${countVisitedTiles(visited, regionId)} tiles charted`;
+
+  if (nearbyEl) {
+    const chips = [];
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        const nx = px + dx;
+        const ny = py + dy;
+        const tile = getRegionTile(regionId, nx, ny);
+        if (tile.t === 'M') continue;
+        const vertical = dy < 0 ? 'N' : dy > 0 ? 'S' : '';
+        const horizontal = dx < 0 ? 'W' : dx > 0 ? 'E' : '';
+        const direction = `${vertical}${horizontal}` || 'Adj';
+        const name = tile.name || TILE_TERRAIN_NAMES[tile.t] || 'Unknown';
+        chips.push(
+          `<button type="button" class="world-nearby-chip" onclick="focusWorldTile(${nx}, ${ny})">`
+          + `<span class="world-nearby-dir">${direction}</span>`
+          + `<span class="world-nearby-name">${escHtml(name)}</span>`
+          + `<span class="world-nearby-glyph">${escHtml(TILE_GLYPHS[tile.t] ?? '·')}</span>`
+          + `</button>`
+        );
+      }
+    }
+    nearbyEl.innerHTML = chips.join('') || '<div class="world-empty-note">No traversable neighboring tiles are currently in range.</div>';
+  }
+}
+
 function renderTileMap() {
   const grid = document.getElementById('tile-grid');
   const wrap = document.getElementById('tile-map-wrap');
   if (!grid || !wrap || !_character || !_gameState) return;
 
   const state = _gameState;
-  const MAPPED_REGIONS = ['ashen-frontier'];
-  const regionId = MAPPED_REGIONS.includes(state.regionId) ? state.regionId : 'ashen-frontier';
+  const regionId = getRenderedRegionId(state);
   const px = state.tileX ?? 9;
   const py = state.tileY ?? 6;
   const visited = new Set(state.visitedTiles ?? []);
 
-  // If visitedTiles empty (old character), pre-reveal around start
-  if (visited.size === 0) {
+  // If the rendered region has no revealed data yet, pre-reveal around the player.
+  if (countVisitedTiles(visited, regionId) === 0) {
     for (let dy = -2; dy <= 2; dy++)
       for (let dx = -2; dx <= 2; dx++)
         visited.add(`${regionId}:${px + dx}:${py + dy}`);
@@ -1178,6 +1350,9 @@ function renderTileMap() {
   const mapW = regionId === 'ashen-frontier' ? AF_W : 10;
   const mapH = regionId === 'ashen-frontier' ? AF_H : 10;
   const isTraveling = _travelReadyAt > Date.now();
+  const selectedTile = _selectedWorldTile && _selectedWorldTile.regionId === regionId
+    ? _selectedWorldTile
+    : { regionId, x: px, y: py };
 
   grid.innerHTML = '';
   grid.style.gridTemplateColumns = `repeat(${mapW}, ${TILE_SIZE}px)`;
@@ -1192,6 +1367,7 @@ function renderTileMap() {
       const isVis    = visited.has(vKey) || isPlayer;
       const inFog    = !isVis && !isAdj;
       const canMove  = isAdj && tile.t !== 'M' && !isTraveling;
+      const isSelected = selectedTile.x === x && selectedTile.y === y;
 
       const div = document.createElement('div');
       let cls = `tile t-${tile.t === '.' ? 'dot' : tile.t}`;
@@ -1200,12 +1376,14 @@ function renderTileMap() {
       if (isAdj && !inFog) cls += ' t-adj-vis';
       if (canMove)  cls += ' t-adj';
       if (isVis && !isPlayer) cls += ' t-visited';
+      if (isSelected) cls += ' t-selected';
       // City-specific color class
       if (tile.t === 'C' && tile.cityId) cls += ` city-${tile.cityId}`;
       // Area biome class for color variety
       if (tile.areaId) cls += ` area-${tile.areaId.split('-').slice(0,2).join('-')}`;
       div.className = cls;
       div.textContent = isPlayer ? '⊕' : (TILE_GLYPHS[tile.t] ?? '·');
+      div.title = tile.name || TILE_TERRAIN_NAMES[tile.t] || 'Unknown terrain';
 
       if (canMove) {
         div.addEventListener('click', () => moveTile(x, y));
@@ -1231,19 +1409,28 @@ function renderTileMap() {
     const regionName = ({ 'ashen-frontier':'Ashen Frontier', 'jade-delta':'Jade Delta', 'iron-wilds':'Iron Wilds', 'void-rift':'Void Rift', 'celestial-plateau':'Celestial Plateau', 'sovereign-wastes':'Sovereign Wastes' })[regionId] ?? regionId;
     realmLabel.textContent = `${regionName} · ${rName}`;
   }
+
+  if (!_selectedWorldTile || _selectedWorldTile.regionId !== regionId) {
+    _selectedWorldTile = { regionId, x: px, y: py };
+  }
+
+  renderWorldHud(regionId, px, py, visited);
+  const activeTile = getRegionTile(regionId, _selectedWorldTile.x, _selectedWorldTile.y);
+  showTileInfo(activeTile, _selectedWorldTile.x, _selectedWorldTile.y, { preserveSelection: true });
 }
 
 async function moveTile(x, y) {
   if (_guestMode || !_character) return;
   // Client-side travel gate
   const now = Date.now();
+  const renderedRegionId = getRenderedRegionId(_gameState);
+  const tile = getRegionTile(renderedRegionId, x, y);
   if (_travelReadyAt > now) {
     const secs = Math.ceil((_travelReadyAt - now) / 1000);
-    showTileInfo({ t: '.' }, x, y, `⏳ Still traveling… ${secs}s`);
+    showTileInfo(tile, x, y, { statusMessage: `Still traveling… ${secs}s until movement opens again.` });
     return;
   }
   const regionId = _gameState?.regionId ?? 'ashen-frontier';
-  const tile = getRegionTile(regionId, x, y);
   const r = await API.post('/api/game/action', { action: 'moveToTile', options: { x, y, regionId, terrainType: tile.t } });
   if (!r.ok) {
     if (r.data.cooldown_ms) {
@@ -1258,8 +1445,9 @@ async function moveTile(x, y) {
     _travelReadyAt = Date.now() + r.data.travelCooldown;
     startTravelTimer();
   }
+  _selectedWorldTile = { regionId: renderedRegionId, x, y };
   renderTileMap();
-  showTileInfo(tile, x, y);
+  showTileInfo(tile, x, y, { statusMessage: 'You arrive and take stock of the terrain.' });
 }
 
 function startTravelTimer() {
@@ -1269,96 +1457,223 @@ function startTravelTimer() {
     if (rem <= 0) {
       clearInterval(_travelTimerInterval);
       _travelTimerInterval = null;
-      renderTileMap(); // re-enable movement
-      const bar = document.getElementById('tile-info');
-      if (bar && bar.dataset.traveling === '1') bar.textContent = 'You have arrived. Click adjacent tiles to continue.';
+      const regionId = getRenderedRegionId(_gameState);
+      const x = _gameState?.tileX ?? 9;
+      const y = _gameState?.tileY ?? 6;
+      _selectedWorldTile = { regionId, x, y };
+      renderTileMap();
+      showTileInfo(getRegionTile(regionId, x, y), x, y, {
+        statusMessage: 'You arrive. The tile inspector has refreshed with the local field read.'
+      });
       return;
     }
-    const bar = document.getElementById('tile-info');
-    if (bar) {
-      bar.dataset.traveling = '1';
-      bar.innerHTML = `⏳ Traveling… <strong>${Math.ceil(rem / 1000)}s</strong> until you can move again.`;
-    }
-    renderTileMap(); // keep adj tiles non-clickable
+    renderTileMap();
   }, 1000);
 }
 
-function showTileInfo(tile, x, y) {
+function showTileInfo(tile, x, y, options = {}) {
   const bar = document.getElementById('tile-info');
   if (!bar) return;
 
-  const name = tile.name ?? TILE_TERRAIN_NAMES[tile.t] ?? 'Unknown';
-  let html = `<strong>${escHtml(name)}</strong>`;
+  const regionId = options.regionId ?? getRenderedRegionId(_gameState);
+  _selectedWorldTile = { regionId, x, y };
 
-  if (tile.t === 'K') html = `<strong>⛏ ${escHtml(name)}</strong>`;
-  else if (tile.t === 'H') html = `<strong>✿ ${escHtml(name)}</strong>`;
-  else if (tile.t === 'B') html = `<strong>⊛ ${escHtml(name)}</strong>`;
-  else if (tile.t === 'V') html = `<strong>◎ ${escHtml(name)}</strong>`;
-  else if (tile.t === 'X') html = `<strong>✦ ${escHtml(name)}</strong>`;
+  const currentX = _gameState?.tileX ?? 9;
+  const currentY = _gameState?.tileY ?? 6;
+  const isPlayer = x === currentX && y === currentY;
+  const isTraveling = _travelReadyAt > Date.now();
+  const travelSecs = Math.ceil(Math.max(0, _travelReadyAt - Date.now()) / 1000);
+  const area = getTileAreaProfile(tile);
+  const intelGroups = getTileIntelGroups(tile);
+  const terrainName = TILE_TERRAIN_NAMES[tile.t] ?? 'Unknown Terrain';
+  const glyph = isPlayer ? '⊕' : (TILE_GLYPHS[tile.t] ?? '·');
+  const dangerLabel = tile.hazard
+    ? (tile.hazard >= 6 ? 'Extreme threat' : tile.hazard >= 4 ? 'High threat' : tile.hazard >= 2 ? 'Mid threat' : 'Low threat')
+    : 'Quiet ground';
+  const statusMessage = options.statusMessage
+    ?? (isPlayer && isTraveling
+      ? `Traveling… ${travelSecs}s until the next move window opens.`
+      : isPlayer
+        ? 'You are standing here. Inspect the field read, then use highlighted adjacent tiles to keep moving.'
+        : 'This tile is within your scouting range. Use it to plan your next step before committing movement.');
 
-  if (tile.hazard) {
-    const dl = tile.hazard >= 7 ? 'Extreme' : tile.hazard >= 5 ? 'High' : tile.hazard >= 3 ? 'Mid' : 'Low';
-    html += ` <span class="tag-danger">⚠ Danger ${tile.hazard}</span>`;
+  const chips = [
+    `<span class="tag-city">${escHtml(`Coords ${x},${y}`)}</span>`,
+    `<span class="tag-city">${escHtml(terrainName)}</span>`
+  ];
+  if (tile.hazard) chips.push(`<span class="tag-danger">⚠ ${escHtml(dangerLabel)}</span>`);
+  if (tile.spiritDensity) chips.push(`<span class="tag-vein">Spirit ×${tile.spiritDensity}</span>`);
+  if (tile.cityId) chips.push('<span class="tag-city">City Anchor</span>');
+
+  const actionButtons = [];
+  if (tile.areaId) {
+    actionButtons.push(`<button type="button" class="btn-sm btn-primary" onclick="openZoneForArea('${tile.areaId}', ${x}, ${y})">Area Intel</button>`);
   }
-  if (tile.spiritDensity) html += ` <span class="tag-vein">Spirit ×${tile.spiritDensity}</span>`;
-  if (tile.cityId) html += ` <span class="tag-city">City</span>`;
-
-  // Resource hints
   if (tile.herbs?.length) {
-    html += ` · <span class="tag-herb">Herbs: ${tile.herbs.map(h => escHtml(h.replace(/-/g,' ').replace(/\b\w/g, c => c.toUpperCase()))).join(', ')}</span>`;
+    actionButtons.push(`<button type="button" class="btn-sm btn-ghost" onclick="previewWorldAction('herbs', ${x}, ${y})">Herb Routes</button>`);
   }
   if (tile.ores?.length) {
-    html += ` · <span class="tag-ore">Ores: ${tile.ores.map(o => escHtml(o.replace(/-/g,' ').replace(/\b\w/g, c => c.toUpperCase()))).join(', ')}</span>`;
+    actionButtons.push(`<button type="button" class="btn-sm btn-ghost" onclick="previewWorldAction('ores', ${x}, ${y})">Ore Survey</button>`);
   }
   if (tile.mobs?.length) {
-    html += ` · <span class="tag-mob">Mobs: ${tile.mobs.map(m => escHtml(m.replace(/-/g,' ').replace(/\b\w/g, c => c.toUpperCase()))).join(', ')}</span>`;
+    actionButtons.push(`<button type="button" class="btn-sm btn-ghost" onclick="previewWorldAction('mobs', ${x}, ${y})">Track Threats</button>`);
   }
-  if (tile.drops?.length) {
-    html += ` · <span class="tag-drop">Drops: ${tile.drops.map(d => escHtml(d.replace(/-/g,' ').replace(/\b\w/g, c => c.toUpperCase()))).join(', ')}</span>`;
+  if (tile.spiritDensity) {
+    actionButtons.push(`<button type="button" class="btn-sm btn-ghost" onclick="previewWorldAction('spirit', ${x}, ${y})">Qi Survey</button>`);
   }
-  if (tile.afkable) html += ` <span class="tag-afk">⏳ AFK-farmable</span>`;
+  if (tile.cityId) {
+    actionButtons.push(`<button type="button" class="btn-sm btn-ghost" onclick="previewWorldAction('city', ${x}, ${y})">City Hooks</button>`);
+  }
 
-  if (tile.areaId) {
-    html += ` &nbsp;<button class="btn-sm btn-primary" style="margin-left:.4rem" onclick="openZoneForArea('${escHtml(tile.areaId)}')">Explore</button>`;
-  }
-  bar.innerHTML = html;
+  const intelMarkup = intelGroups.map(group => {
+    const items = group.items
+      .map(item => `<span class="${group.chipClass}">${escHtml(titleizeSlug(item))}</span>`)
+      .join(' ');
+    return `
+      <div class="tile-intel-row">
+        <div class="tile-intel-label">${escHtml(group.label)}</div>
+        <div class="tile-intel-copy">${items}</div>
+      </div>
+    `;
+  }).join('');
+
+  bar.dataset.traveling = isPlayer && isTraveling ? '1' : '0';
+  bar.innerHTML = `
+    <div class="tile-detail">
+      <div class="tile-detail-header">
+        <div>
+          <div class="tile-detail-kicker">${isPlayer ? 'Current Tile' : 'Surveyed Tile'}</div>
+          <h3 class="tile-detail-title">${escHtml(glyph)} ${escHtml(area.name)}</h3>
+          <div class="tile-detail-meta">${chips.join(' ')}</div>
+        </div>
+        <div class="tile-detail-glyph">${escHtml(glyph)}</div>
+      </div>
+
+      <div class="tile-detail-status${isPlayer && isTraveling ? ' is-live' : ''}">${escHtml(statusMessage)}</div>
+
+      <div class="tile-detail-grid">
+        <div class="tile-section-card">
+          <div class="tile-section-label">Area Focus</div>
+          <div class="tile-section-value">${escHtml(area.focusLabel)}</div>
+          <p class="tile-section-copy">${escHtml(area.description)}</p>
+        </div>
+        <div class="tile-section-card">
+          <div class="tile-section-label">Field Read</div>
+          <div class="tile-section-value">${escHtml(area.typeLabel)}</div>
+          <p class="tile-section-copy">${escHtml(area.summary)}</p>
+        </div>
+      </div>
+
+      ${intelMarkup ? `<div class="tile-intel-list">${intelMarkup}</div>` : '<div class="world-empty-note">No obvious herbs, veins, drops, or roaming packs are surfacing on this exact tile yet.</div>'}
+
+      ${tile.afkable ? '<div class="tag-afk">⏳ Repeatable field loop marked on this tile</div>' : ''}
+      ${actionButtons.length ? `<div class="world-action-row">${actionButtons.join('')}</div>` : ''}
+      ${tile.areaId ? '<div class="tile-detail-footnote">Area intel now falls back to local map metadata instead of collapsing into a dead-end when no dedicated server zone seed exists yet.</div>' : ''}
+    </div>
+  `;
 }
 
-async function openZoneForArea(areaId) {
+async function openZoneForArea(areaId, x, y) {
   if (_guestMode || !_character) return;
-  const r = await API.get('/api/zones');
-  if (!r.ok) return;
-
-  const zones = (r.data.zones || []).filter(z =>
-    z.name.toLowerCase().replace(/\s+/g,'-').includes(areaId.split('-').slice(0,2).join('-'))
-    || (z.region_id ?? '') === (_gameState?.regionId ?? 'ashen-frontier')
-  );
 
   const bar = document.getElementById('tile-info');
   if (!bar) return;
-  if (!zones.length) { showToast('No zones found for this area.', 'warn'); return; }
+  const regionId = getRenderedRegionId(_gameState);
+  const tx = x ?? _selectedWorldTile?.x ?? (_gameState?.tileX ?? 9);
+  const ty = y ?? _selectedWorldTile?.y ?? (_gameState?.tileY ?? 6);
+  const tile = getRegionTile(regionId, tx, ty);
+  const area = getTileAreaProfile({ ...tile, areaId });
+  _selectedWorldTile = { regionId, x: tx, y: ty };
 
-  // Show first matching zone detail below the tile info
+  let zones = [];
+  const zr = await API.get('/api/zones');
+  if (zr.ok) {
+    const targets = new Set([
+      slugifyWorld(areaId),
+      slugifyWorld(area.name),
+      slugifyWorld(tile.name)
+    ]);
+    zones = (zr.data.zones || []).filter(zone => {
+      const zoneSlugs = [slugifyWorld(zone.id), slugifyWorld(zone.name)];
+      return zoneSlugs.some(zoneSlug => {
+        for (const target of targets) {
+          if (!target) continue;
+          if (zoneSlug === target || zoneSlug.includes(target) || target.includes(zoneSlug)) {
+            return true;
+          }
+        }
+        return false;
+      });
+    });
+  }
+
+  let bodyHtml = `
+    <div class="tile-area-report">
+      <div class="tile-detail-header">
+        <div>
+          <div class="tile-detail-kicker">Area Intel</div>
+          <h3 class="tile-detail-title">${escHtml(area.name)}</h3>
+          <div class="tile-detail-meta">
+            <span class="tag-city">${escHtml(area.typeLabel)}</span>
+            <span class="tag-city">${escHtml(area.focusLabel)}</span>
+            ${area.danger ? `<span class="tag-danger">⚠ Danger ${area.danger}</span>` : ''}
+          </div>
+        </div>
+        <button type="button" class="btn-sm btn-ghost" onclick="focusWorldTile(${tx}, ${ty})">Back To Tile</button>
+      </div>
+      <p class="tile-section-copy">${escHtml(area.description)} ${escHtml(area.summary)}</p>
+  `;
+
+  if (!zones.length) {
+    const fallbackCards = getTileIntelGroups(tile).map(group => `
+      <div class="node-card node-card-local">
+        <div class="node-name">${escHtml(group.label)}</div>
+        <div class="node-meta">Local field read · ${group.items.length} mapped signal(s)</div>
+        <div class="tile-section-copy">${group.items.map(item => escHtml(titleizeSlug(item))).join(', ')}</div>
+      </div>
+    `).join('');
+
+    bodyHtml += `
+      <div class="world-empty-note">
+        This area no longer hard-fails into “no zones found.” It already shows live map intel here, but a dedicated D1 exploration zone still needs to be seeded before full server-driven node farming can happen.
+      </div>
+      ${fallbackCards || '<div class="world-empty-note">No persistent node packages are seeded for this area yet.</div>'}
+    `;
+    bodyHtml += '</div>';
+    bar.innerHTML = bodyHtml;
+    return;
+  }
+
   const zone = zones[0];
   const rd = await API.get(`/api/zones/${zone.id}`);
-  if (!rd.ok) return;
+  if (!rd.ok) {
+    bodyHtml += '<div class="world-empty-note">The live zone hook exists, but its detail payload failed to load.</div></div>';
+    bar.innerHTML = bodyHtml;
+    return;
+  }
 
   const nodes = rd.data.nodes || [];
-  let html = `<strong>${escHtml(zone.name)}</strong> — ${nodes.length} nodes<br>`;
+  bodyHtml += `<div class="tile-section-card"><div class="tile-section-label">Live Zone Match</div><div class="tile-section-value">${escHtml(zone.name)}</div><p class="tile-section-copy">${escHtml(zone.description || 'This zone has a live server payload and can be explored for drops.')}</p></div>`;
+  bodyHtml += nodes.length
+    ? '<div class="node-list">'
+    : '<div class="world-empty-note">This zone is linked, but no live nodes are currently available.</div>';
+
   nodes.forEach(node => {
     const lastLooted = node.last_looted;
     const respawnMs = (node.respawn_hours || 4) * 3600000;
     const onCd = lastLooted && (Date.now() - lastLooted < respawnMs);
     const rem  = onCd ? respawnMs - (Date.now() - lastLooted) : 0;
     const discovered = node.discovered;
-    html += `<div class="node-card ${onCd ? 'node-cd' : ''}" style="margin:.3rem 0 0">`;
-    html += `<span class="node-name">${discovered ? escHtml(node.name) : '??? Unknown'}</span>`;
-    html += ` <span class="node-meta">${escHtml(node.node_type||'')} · Realm ${node.realm_req}+</span>`;
-    if (onCd) html += ` <span class="node-cd-label">Respawning ${msToMin(rem)}</span>`;
-    else      html += ` <button class="btn-sm btn-primary" onclick="exploreNodeFromTile('${node.id}','${zone.id}')">Explore</button>`;
-    html += `</div>`;
+    bodyHtml += `<div class="node-card ${onCd ? 'node-cd' : ''}" style="margin:.3rem 0 0">`;
+    bodyHtml += `<span class="node-name">${discovered ? escHtml(node.name) : '??? Unknown'}</span>`;
+    bodyHtml += ` <span class="node-meta">${escHtml(node.node_type||'')} · Realm ${node.realm_req}+</span>`;
+    if (onCd) bodyHtml += ` <span class="node-cd-label">Respawning ${msToMin(rem)}</span>`;
+    else      bodyHtml += ` <button class="btn-sm btn-primary" onclick="exploreNodeFromTile('${node.id}','${zone.id}')">Explore</button>`;
+    bodyHtml += `</div>`;
   });
-  bar.innerHTML = html;
+  if (nodes.length) bodyHtml += '</div>';
+  bodyHtml += '</div>';
+  bar.innerHTML = bodyHtml;
 }
 
 async function exploreNodeFromTile(nodeId, zoneId) {
@@ -1369,8 +1684,9 @@ async function exploreNodeFromTile(nodeId, zoneId) {
   showToast((r.data.result || ['Explored!']).join(' '), 'ok');
   appendToLog((r.data.result || []).join(' '));
   // Refresh the area info
-  const tile = getRegionTile(_gameState.regionId ?? 'ashen-frontier', _gameState.tileX ?? 9, _gameState.tileY ?? 6);
-  if (tile.areaId) openZoneForArea(tile.areaId);
+  const regionId = getRenderedRegionId(_gameState);
+  const tile = getRegionTile(regionId, _gameState.tileX ?? 9, _gameState.tileY ?? 6);
+  if (tile.areaId) openZoneForArea(tile.areaId, _gameState.tileX ?? 9, _gameState.tileY ?? 6);
 }
 
 function setupExplorePanel() {

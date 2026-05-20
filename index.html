@@ -243,22 +243,57 @@
            <span class="panel-meta" id="explore-realm-label">Ashen Frontier · Mortal</span>
          </div>
 
-         <div class="tile-map-wrap" id="tile-map-wrap">
-           <div class="tile-grid" id="tile-grid"></div>
-           <div class="tile-map-legend">
-             <span title="Your position">⊕ You</span>
-             <span title="City">⌂ City</span>
-             <span title="Spirit Vein">◎ Vein</span>
-             <span title="Ancient Ruin / Exploration Zone">✦ Zone</span>
-             <span title="Wilderness Zone">≋ Wild</span>
-             <span title="Forest">♦ Forest</span>
-             <span title="Cave / Mine">⛏ Cave</span>
-             <span title="Herb Grove">✿ Herbs</span>
-             <span title="Beast Lair">⊛ Lair</span>
-             <span title="Mountain (impassable)">▲ Mtns</span>
+         <div class="world-shell">
+           <div class="world-map-column">
+             <div class="world-status-card">
+               <div class="world-stat-grid">
+                 <div class="world-stat">
+                   <span class="world-stat-label">Position</span>
+                   <strong id="world-current-position">Ashen Frontier · 9,6</strong>
+                 </div>
+                 <div class="world-stat">
+                   <span class="world-stat-label">Current Area</span>
+                   <strong id="world-current-area">Ashgate Borough</strong>
+                 </div>
+                 <div class="world-stat">
+                   <span class="world-stat-label">Travel State</span>
+                   <strong id="world-travel-state">Movement window open</strong>
+                 </div>
+                 <div class="world-stat">
+                   <span class="world-stat-label">Charted</span>
+                   <strong id="world-explored-count">0 tiles charted</strong>
+                 </div>
+               </div>
+               <div class="world-nearby-row" id="world-nearby">Nearby routes populate here as you scout.</div>
+             </div>
+
+             <div class="tile-map-wrap" id="tile-map-wrap">
+               <div class="tile-grid" id="tile-grid"></div>
+               <div class="tile-map-legend">
+                 <span title="Your position">⊕ You</span>
+                 <span title="City">⌂ City</span>
+                 <span title="Spirit Vein">◎ Vein</span>
+                 <span title="Ancient Ruin / Exploration Zone">✦ Zone</span>
+                 <span title="Wilderness Zone">≋ Wild</span>
+                 <span title="Forest">♦ Forest</span>
+                 <span title="Cave / Mine">⛏ Cave</span>
+                 <span title="Herb Grove">✿ Herbs</span>
+                 <span title="Beast Lair">⊛ Lair</span>
+                 <span title="Mountain (impassable)">▲ Mtns</span>
+               </div>
+             </div>
            </div>
+
+           <aside class="world-sidebar">
+             <div class="tile-info-panel" id="tile-info">
+               <div class="tile-detail">
+                 <div class="tile-detail-kicker">Current Tile</div>
+                 <h3 class="tile-detail-title">World Intel</h3>
+                 <div class="tile-detail-status">Open the World panel and the current tile will auto-populate here with nearby routes, resource hints, and live travel state.</div>
+               </div>
+             </div>
+           </aside>
          </div>
-         <div class="tile-info-bar" id="tile-info">Click adjacent tiles (highlighted in gold) to move through the world.</div>
        </section>
 
 
