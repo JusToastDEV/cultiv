@@ -3417,14 +3417,13 @@ function showTileInfo(tile, x, y, options = {}) {
 
   bar.dataset.traveling = isPlayer && isTraveling ? '1' : '0';
   bar.innerHTML = `
-    <div class="tile-readout">
-      <div class="tile-readout-head">
-        <div>
-          <div class="tile-readout-kicker">${isPlayer ? 'Current Tile' : 'Surveyed Tile'}</div>
-          <h3 class="tile-readout-title">${escHtml(glyph)} ${escHtml(area.name)}</h3>
-          <div class="tile-detail-meta">${chips.join(' ')}</div>
+    <div class="tile-detail">
+      <div class="tile-detail-kicker">${isPlayer ? 'Current Tile' : 'Surveyed Tile'}</div>
+      <div class="tile-detail-head compact-head">
+        <div class="tile-detail-info">
+          <h3 class="tile-detail-title">${escHtml(glyph)} ${escHtml(area.name)}</h3>
+          <div class="world-inline-meta">${chips.join('')}</div>
         </div>
-        <div class="tile-detail-glyph">${escHtml(glyph)}</div>
       </div>
 
       <div class="tile-readout-summary${isPlayer && isTraveling ? ' is-live' : ''}">${escHtml(statusMessage)}</div>
