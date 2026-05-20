@@ -1724,17 +1724,44 @@ function exitLocalTileView() {
 function moveLocalPlayer(tx, ty) {
   if (!_localMapData) return false;
   if (tx < 0 || tx >= _localMapData.width || ty < 0 || ty >= _localMapData.height) return false;
+  
+  // Check 2-second cooldown on local movement
+  const now = Date.now();
+  if (_localMovementReadyAt > now) {
+    const secs = Math.ceil((_localMovementReadyAt - now) / 1000);
+    const worldTile = getRegionTile(_localViewTile.regionId, _localViewTile.x, _localViewTile.y);
+    showTileInfo(worldTile, _localViewTile.x, _localViewTile.y, {
+      statusMessage: `Local movement locked. ${secs}s remaining before you can move to the next tile.`,
+      inLocalView: true
+    });
+    return false;
+  }
+  
   if (_localPlayerX !== null && _localPlayerY !== null) {
     const distance = Math.abs(tx - _localPlayerX) + Math.abs(ty - _localPlayerY);
     if (distance > 1) return false;
   }
 
-  if (tx < 0 || tx >= _localMapData.width || ty < 0 || ty >= _localMapData.height) return false;
   const tile = _localMapData.tiles[ty * _localMapData.width + tx];
-  if (!tile || tile.terrain === '#') return false;
+  if (!tile || tile.terrain === '#' || tile.terrain === 'B') return false;
   
+  // Move player and set 2-second cooldown
   _localPlayerX = tx;
   _localPlayerY = ty;
+  _localMovementReadyAt = Date.now() + 2000;
+  
+  // Show new position info
+  const worldTile = getRegionTile(_localViewTile.regionId, _localViewTile.x, _localViewTile.y);
+  const newSubtile = _localMapData.tiles[_localPlayerY * _localMapData.width + _localPlayerX];
+  const msg = newSubtile.npcName 
+    ? `Stepped toward ${newSubtile.npcName}. Interact with this NPC at the local site.`
+    : newSubtile.resources?.length
+      ? `Gathered near ${newSubtile.label || 'a resource node'}.`
+      : newSubtile.mobs?.length
+        ? `Danger ahead - mobs detected.`
+        : `Moved to ${newSubtile.label || newSubtile.terrain_kind}. 2 seconds until next step.`;
+  showTileInfo(worldTile, _localViewTile.x, _localViewTile.y, { statusMessage: msg, inLocalView: true });
+  
   return true;
 }
 
@@ -3056,6 +3083,7 @@ function renderLocalMapView(grid, wrap, TILE_SIZE) {
   const worldTile = getRegionTile(_localViewTile.regionId, _localViewTile.x, _localViewTile.y);
   const localVisitors = getVisiblePlayers().filter(player => player.regionId === _localViewTile.regionId && player.tileX === _localViewTile.x && player.tileY === _localViewTile.y);
   const visitorPositions = getLocalVisitorPositions(_localMapData, _localPlayerX, _localPlayerY, localVisitors);
+  const canMoveNow = _localMovementReadyAt <= Date.now();
   
   grid.innerHTML = '';
   grid.style.gridTemplateColumns = `repeat(${mapW}, ${TILE_SIZE}px)`;
@@ -3069,7 +3097,8 @@ function renderLocalMapView(grid, wrap, TILE_SIZE) {
       
       const isPlayer = x === _localPlayerX && y === _localPlayerY;
       const visitor = visitorPositions.get(`${x}:${y}`) || null;
-      const canStep = Math.abs(x - _localPlayerX) + Math.abs(y - _localPlayerY) === 1;
+      const canStep = Math.abs(x - _localPlayerX) + Math.abs(y - _localPlayerY) === 1 && canMoveNow;
+      const isBlocked = subtile.terrain === '#' || subtile.terrain === 'B' || subtile.mobs?.length;
       const terrainGlyph = subtile.mobs?.length
         ? '☠'
         : subtile.hazards?.length
@@ -3085,8 +3114,8 @@ function renderLocalMapView(grid, wrap, TILE_SIZE) {
       if (isPlayer) {
         cls += ' is-player';
       } else if (visitor) {
-        cls += ' has-visitor';
-      } else if (canStep && subtile.terrain !== '#' && subtile.terrain !== 'B') {
+        cls += ' has-visitor has-player-visitor';
+      } else if (canStep && !isBlocked) {
         cls += ' is-adjacent';
       } else if (subtile.resources?.length) {
         cls += ' has-resource';
@@ -3094,8 +3123,8 @@ function renderLocalMapView(grid, wrap, TILE_SIZE) {
         cls += ' has-mob';
       } else if (subtile.hazards?.length) {
         cls += ' has-hazard';
-      } else if (subtile.npcName) {
-        cls += ' has-npc';
+      } else if (subtile.npcName || subtile.service) {
+        cls += ' has-npc has-building';
       }
       
       if (subtile.terrain === '#') {
@@ -3106,7 +3135,12 @@ function renderLocalMapView(grid, wrap, TILE_SIZE) {
       const label = isPlayer
         ? (_character?.name || 'You')
         : visitor?.name || subtile.npcName || subtile.label || '';
-      const glyph = isPlayer ? '⊕' : visitor ? '◉' : terrainGlyph;
+      const buildingGlyph = {
+        'bank': '◫', 'guild': '⚒', 'sect': '⛩', 'techniques': '☰', 'patron': '⊗', 
+        'blacksmith': '♨', 'duel': '⚔', 'rumor': '⊙', 'plaza': '◎'
+      };
+      const npcGlyph = subtile.service && buildingGlyph[subtile.service] ? buildingGlyph[subtile.service] : terrainGlyph;
+      const glyph = isPlayer ? '⊕' : visitor ? '●' : (subtile.npcName || subtile.service ? npcGlyph : terrainGlyph);
       div.innerHTML = `${label ? `<span class="local-tile-nameplate">${escHtml(label)}</span>` : ''}<span class="local-tile-glyph">${escHtml(glyph)}</span>`;
       div.title = visitor
         ? `${visitor.name} · ${subtile.label || subtile.terrain_kind}`
@@ -3240,6 +3274,53 @@ function startTravelTimer() {
 function showTileInfo(tile, x, y, options = {}) {
   const bar = document.getElementById('tile-info');
   if (!bar) return;
+
+  // Handle local view display
+  if (options.inLocalView && _viewMode === 'local') {
+    const subtile = getLocalPlayerTile();
+    if (!subtile) return;
+    
+    const glyph = '▸';
+    const label = subtile.label || subtile.npcName || subtile.terrain_kind || 'local location';
+    const movementCooldownSecs = Math.ceil(Math.max(0, _localMovementReadyAt - Date.now()) / 1000);
+    const canMoveSoon = _localMovementReadyAt <= Date.now();
+    
+    const chips = [
+      `<span class="tag-city">Local [${_localPlayerX},${_localPlayerY}]</span>`,
+      `<span class="tag-city">${escHtml(label)}</span>`
+    ];
+    if (subtile.npcName) chips.push(`<span class="tag-city">${escHtml(subtile.npcName)}</span>`);
+    if (!canMoveSoon) chips.push(`<span class="tag-warning">⏱ ${movementCooldownSecs}s cooldown</span>`);
+    
+    const statusMessage = options.statusMessage || 'Navigating the local district. Click adjacent tiles to move.';
+    
+    bar.innerHTML = `
+      <div class="tile-detail">
+        <div class="tile-detail-kicker">Local Position</div>
+        <div class="tile-detail-head compact-head">
+          <div class="tile-detail-info">
+            <h3 class="tile-detail-title">${escHtml(glyph)} ${escHtml(label)}</h3>
+            <div class="world-inline-meta">${chips.join('')}</div>
+          </div>
+        </div>
+        <div class="tile-readout-summary">${escHtml(statusMessage)}</div>
+        <div class="tile-readout-strip">
+          <div class="tile-readout-line">
+            <div class="tile-readout-line-label">Clock</div>
+            <div class="tile-readout-line-value">${escHtml(getLiveClockText())}</div>
+          </div>
+          <div class="tile-readout-line">
+            <div class="tile-readout-line-label">View</div>
+            <div class="tile-readout-line-value">Local field active</div>
+          </div>
+        </div>
+        <div class="world-action-row">
+          <button type="button" class="btn-sm btn-primary" onclick="toggleWorldView()">Back to World Map</button>
+        </div>
+      </div>
+    `;
+    return;
+  }
 
   const regionId = options.regionId ?? getRenderedRegionId(_gameState);
   _selectedWorldTile = { regionId, x, y };

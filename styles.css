@@ -2315,16 +2315,17 @@ button.btn-locked {
   margin-top:.35rem;
 }
 .tile-detail-glyph {
-  min-width:46px;
-  height:46px;
-  border-radius:8px;
+  min-width:40px;
+  height:40px;
+  border-radius:6px;
   border:1px solid rgba(201,162,50,.18);
   display:flex;
   align-items:center;
   justify-content:center;
-  font-size:1.2rem;
+  font-size:1.1rem;
   color:var(--paper);
   background:rgba(255,255,255,.03);
+  flex-shrink:0;
 }
 .tile-detail-status {
   border:none;
@@ -2498,13 +2499,46 @@ button.btn-locked {
 }
 .local-inspector-card.compact {
   min-height:unset;
-  padding:.75rem .8rem;
+  padding:.45rem .5rem;
+  margin-bottom:.3rem;
+  background:rgba(20,22,28,.6);
+  border-radius:6px;
+}
+.local-inspector-card.compact .local-inspector-label {
+  font-size:.65rem;
+}
+.local-inspector-card.compact .local-inspector-value {
+  margin-top:.08rem;
+  font-size:.9rem;
+}
+.local-inspector-card.compact .local-inspector-copy {
+  margin-top:.08rem;
+  font-size:.75rem;
 }
 .world-inline-meta {
   display:flex;
   flex-wrap:wrap;
   gap:.4rem;
-  margin:.5rem 0 .65rem;
+  margin:.35rem 0 0;
+  align-items:center;
+}
+.tile-detail-head.compact-head {
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:.5rem;
+  align-items:flex-start;
+  margin-bottom:.35rem;
+}
+.tile-detail-info {
+  min-width:0;
+}
+.tile-detail-info .tile-detail-title {
+  font-size:1rem;
+  margin-bottom:.1rem;
+}
+.tile-detail-meta {
+  font-size:.75rem;
+  color:var(--ink-2);
 }
 .world-site-detail-head.compact {
   margin-bottom:.25rem;
@@ -2619,12 +2653,24 @@ button.btn-locked {
 .local-tile.has-resource {
   color:#d9bf6e;
 }
-.local-tile.has-visitor {
-  border-color:rgba(76,170,126,.48);
-  box-shadow:0 0 0 1px rgba(76,170,126,.16);
+.local-tile.has-visitor.has-player-visitor {
+  border-color:rgba(76,170,126,.65);
+  box-shadow:0 0 0 2px rgba(76,170,126,.28), inset 0 1px 0 rgba(76,170,126,.18);
+  background:linear-gradient(180deg, rgba(76,170,126,.12), rgba(58,125,96,.05));
 }
-.local-tile.has-npc {
-  border-color:rgba(201,162,50,.34);
+.local-tile.has-visitor.has-player-visitor .local-tile-glyph {
+  color:#5cb87c;
+  font-weight:bold;
+}
+.local-tile.has-npc.has-building {
+  border-color:rgba(201,162,50,.58);
+  box-shadow:0 0 0 1px rgba(201,162,50,.28), inset 0 1px 0 rgba(201,162,50,.14);
+  background:linear-gradient(180deg, rgba(201,162,50,.08), rgba(139,105,20,.06));
+}
+.local-tile.has-building .local-tile-glyph {
+  color:#d4a85b;
+  font-weight:600;
+  font-size:1.15em;
 }
 .local-tile.has-mob {
   color:#df7267;
@@ -2732,8 +2778,9 @@ button.btn-locked {
 .world-service-dock {
   display:flex;
   flex-wrap:wrap;
-  gap:.45rem;
-  margin-top:.65rem;
+  gap:.35rem;
+  margin-top:.35rem;
+  font-size:.85rem;
 }
 .world-service-dock {
   margin-top:0;
