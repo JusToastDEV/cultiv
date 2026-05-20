@@ -1192,12 +1192,12 @@ const AF_SPECIAL = new Map([
 ]);
 
 const EARLY_ACCESS_STARTER_TILES = new Map([
-  ['8:5',  { t:'C', name:'North Market Ward', cityId:'ashgate', localSize:22, localHooksText:'Canopy stalls, ration ledgers, and craft rows dominate this block.' }],
-  ['9:5',  { t:'C', name:'Sect Gate Approach', cityId:'ashgate', localSize:22, localHooksText:'Sect screening courts, petition steps, and spar lanes define the approach.' }],
-  ['10:5', { t:'C', name:'Scriptorium Row', cityId:'ashgate', localSize:21, localHooksText:'Scroll brokers, lacquer stalls, and quiet archive doors hold this side of Ashgate.' }],
-  ['8:6',  { t:'C', name:'Guild Caravan Yard', cityId:'ashgate', localSize:22, localHooksText:'Caravan pens, weigh bridges, and guild dispatch desks keep this block busy.' }],
-  ['9:6',  { t:'C', name:'Ashgate Borough', cityId:'ashgate', localSize:24, localHooksText:'Plaza traffic, the silver vault, the duel ring, and the core civic routes converge here.' }],
-  ['10:6', { t:'C', name:'Broker Lantern Ward', cityId:'ashgate', localSize:22, localHooksText:'Patron brokers, rumor tables, and courier lamps light the ward through the night.' }],
+  ['8:5',  { t:'R', name:'North Market Ward', settlementId:'ashgate', localSize:22, localHooksText:'Canopy stalls, ration ledgers, and craft rows dominate this block.' }],
+  ['9:5',  { t:'R', name:'Sect Gate Approach', settlementId:'ashgate', localSize:22, localHooksText:'Sect screening courts, petition steps, and spar lanes define the approach.' }],
+  ['10:5', { t:'R', name:'Scriptorium Row', settlementId:'ashgate', localSize:21, localHooksText:'Scroll brokers, lacquer stalls, and quiet archive doors hold this side of Ashgate.' }],
+  ['8:6',  { t:'R', name:'Guild Caravan Yard', settlementId:'ashgate', localSize:22, localHooksText:'Caravan pens, weigh bridges, and guild dispatch desks keep this block busy.' }],
+  ['9:6',  { t:'C', name:'Ashgate Borough', cityId:'ashgate', settlementId:'ashgate', cityCore:true, localSize:24, localHooksText:'Plaza traffic, the silver vault, the duel ring, and the core civic routes converge here.' }],
+  ['10:6', { t:'R', name:'Broker Lantern Ward', settlementId:'ashgate', localSize:22, localHooksText:'Patron brokers, rumor tables, and courier lamps light the ward through the night.' }],
   ['8:7',  { t:'H', name:'Reed Garden Terraces', areaId:'ashgate-reed-garden', localSize:20, localHooksText:'Herb terraces, drying sheds, and beginner gather loops are being built out here.', herbs:['qi-grass', 'dustbloom', 'charbloom'], afkable:true, hazard:1 }],
   ['9:7',  { t:'V', name:'Ashgate Training Grounds', areaId:'ashgate-training-grounds', localSize:20, localHooksText:'Meditation stones, sect drills, and sparring rings make this the starter discipline yard.', spiritDensity:2, herbs:['qi-grass'], afkable:true, hazard:1 }],
   ['10:7', { t:'K', name:'Cinder Quarry Mouth', areaId:'ashgate-quarry-mouth', localSize:20, localHooksText:'Ore lifts, lantern camps, and starter mining routes anchor the quarry edge.', ores:['black-iron-ore', 'refined-iron-plate'], drops:['broken-rune-shard'], afkable:true, hazard:1 }]
@@ -1595,7 +1595,7 @@ function applyLocalMapFeature(mapData, x, y, feature) {
 }
 
 function decorateLocalCityMap(tile, mapData) {
-  if (tile.cityId !== 'ashgate') return;
+  if (tile.cityId !== 'ashgate' || !tile.cityCore) return;
 
   const mid = Math.floor(mapData.width / 2);
   const features = [
@@ -1788,12 +1788,48 @@ function getLocalActionForSubtile(worldTile, subtile) {
   if (!subtile) return null;
   if (subtile.mobs?.length) return 'mobs';
   if (subtile.resources?.length) {
+    const resourceList = subtile.resources.map(resource => String(resource).toLowerCase());
+    if (resourceList.some(resource => resource.includes('ore') || resource.includes('stone') || resource.includes('plate') || resource.includes('metal'))) return 'ores';
+    if (resourceList.some(resource => resource.includes('grass') || resource.includes('bloom') || resource.includes('root') || resource.includes('fung') || resource.includes('herb') || resource.includes('cap'))) return 'herbs';
+    if (resourceList.some(resource => resource.includes('rune') || resource.includes('shard') || resource.includes('relic') || resource.includes('blueprint') || resource.includes('core'))) return 'relic';
     if (worldTile.herbs?.length) return 'herbs';
     if (worldTile.ores?.length) return 'ores';
     if (worldTile.drops?.length || worldTile.t === 'X') return 'relic';
   }
-  if (worldTile.spiritDensity && (subtile.terrain === 'Q' || subtile.terrain === 'M')) return 'spirit';
+  if (worldTile.spiritDensity && (subtile.terrain === 'Q' || subtile.terrain === 'M' || subtile.terrain === 'S' || subtile.terrain_kind?.includes('spirit') || subtile.label?.includes('Meditation'))) return 'spirit';
   return null;
+}
+
+function getFieldActionContext(mode, worldTile, subtile) {
+  if (!_localMapData || !_localViewTile || _viewMode !== 'local') {
+    return {
+      regionId: getRenderedRegionId(_gameState),
+      x: worldTile ? (_selectedWorldTile?.x ?? (_gameState?.tileX ?? 9)) : (_gameState?.tileX ?? 9),
+      y: worldTile ? (_selectedWorldTile?.y ?? (_gameState?.tileY ?? 6)) : (_gameState?.tileY ?? 6),
+      terrainType: worldTile?.t ?? '.',
+      hazard: worldTile?.hazard ?? 0,
+      spiritDensity: worldTile?.spiritDensity ?? 0,
+      areaId: worldTile?.areaId ?? null
+    };
+  }
+
+  const terrainByMode = {
+    herbs: subtile?.terrain === 'H' ? 'H' : worldTile?.herbs?.length ? 'H' : 'F',
+    ores: subtile?.terrain === 'S' || subtile?.terrain === 'M' ? 'K' : worldTile?.ores?.length ? 'K' : 'X',
+    mobs: subtile?.terrain === 'D' ? 'B' : worldTile?.mobs?.length ? 'B' : 'W',
+    relic: subtile?.terrain === 'A' || subtile?.terrain === 'R' ? 'X' : worldTile?.drops?.length ? 'X' : '.',
+    spirit: subtile?.terrain === 'Q' || subtile?.terrain === 'S' ? 'V' : worldTile?.spiritDensity ? 'V' : '.'
+  };
+
+  return {
+    regionId: _localViewTile.regionId,
+    x: _localViewTile.x,
+    y: _localViewTile.y,
+    terrainType: terrainByMode[mode] || worldTile?.t || '.',
+    hazard: Math.max(worldTile?.hazard ?? 0, subtile?.hazards?.length ? 1 : 0, subtile?.mobs?.length ? 1 : 0),
+    spiritDensity: Math.max(worldTile?.spiritDensity ?? 0, mode === 'spirit' ? 1 : 0),
+    areaId: worldTile?.areaId ?? null
+  };
 }
 
 function getAshgateQuestEntries() {
@@ -2871,7 +2907,8 @@ async function performTileFieldAction(mode, x, y) {
   if (_guestMode || !_character) return;
   const currentX = _gameState?.tileX ?? 9;
   const currentY = _gameState?.tileY ?? 6;
-  if (x !== currentX || y !== currentY) {
+  const inLocalField = _viewMode === 'local' && _localMapData && _localViewTile;
+  if (!inLocalField && (x !== currentX || y !== currentY)) {
     showToast('You need to stand on a tile before farming it.', 'warn');
     return;
   }
@@ -2880,19 +2917,23 @@ async function performTileFieldAction(mode, x, y) {
     return;
   }
 
-  const regionId = getRenderedRegionId(_gameState);
-  const tile = getRegionTile(regionId, x, y);
+  const regionId = inLocalField ? _localViewTile.regionId : getRenderedRegionId(_gameState);
+  const worldX = inLocalField ? _localViewTile.x : x;
+  const worldY = inLocalField ? _localViewTile.y : y;
+  const tile = getRegionTile(regionId, worldX, worldY);
+  const subtile = inLocalField ? getLocalPlayerTile() : null;
+  const actionContext = getFieldActionContext(mode, tile, subtile);
   const r = await API.post('/api/game/action', {
     action: 'fieldAction',
     options: {
       mode,
-      regionId,
-      x,
-      y,
-      terrainType: tile.t,
-      hazard: tile.hazard ?? 0,
-      spiritDensity: tile.spiritDensity ?? 0,
-      areaId: tile.areaId ?? null
+      regionId: actionContext.regionId,
+      x: actionContext.x,
+      y: actionContext.y,
+      terrainType: actionContext.terrainType,
+      hazard: actionContext.hazard,
+      spiritDensity: actionContext.spiritDensity,
+      areaId: actionContext.areaId
     }
   });
 
@@ -2906,7 +2947,7 @@ async function performTileFieldAction(mode, x, y) {
   renderAll();
   appendToLog((r.data.result || []).join(' '));
   showToast((r.data.result || [`${titleizeSlug(mode)} run complete.`]).join(' '), 'ok');
-  showTileInfo(tile, x, y, { statusMessage: `${titleizeSlug(mode)} cycle complete. This tile is now on personal recovery before the next run.` });
+  showTileInfo(tile, worldX, worldY, { statusMessage: `${titleizeSlug(mode)} cycle complete. This tile is now on personal recovery before the next run.` });
 }
 
 function renderLocalTileMap(tile, x, y) {
