@@ -1531,6 +1531,7 @@ function enterLocalTileView(worldX, worldY, regionId) {
   const spawnPos = getLocalMapSpawnPos(entryDir, _localMapData.width, _localMapData.height);
   _localPlayerX = spawnPos.x;
   _localPlayerY = spawnPos.y;
+  updateWorldViewToggle();
 }
 
 function exitLocalTileView() {
@@ -1540,6 +1541,7 @@ function exitLocalTileView() {
   _localMapData = null;
   _localPlayerX = null;
   _localPlayerY = null;
+  updateWorldViewToggle();
 }
 
 function moveLocalPlayer(tx, ty) {
@@ -2730,8 +2732,8 @@ function showTileInfo(tile, x, y, options = {}) {
       .map(item => `<span class="${group.chipClass}">${escHtml(titleizeSlug(item))}</span>`)
       .join(' ');
     return `
-      <div class="tile-intel-row">
-        <div class="tile-intel-label">${escHtml(group.label)}</div>
+      <div class="tile-intel-inline">
+        <div class="tile-intel-inline-label">${escHtml(group.label)}</div>
         <div class="tile-intel-copy">${items}</div>
       </div>
     `;
@@ -2739,32 +2741,38 @@ function showTileInfo(tile, x, y, options = {}) {
 
   bar.dataset.traveling = isPlayer && isTraveling ? '1' : '0';
   bar.innerHTML = `
-    <div class="tile-detail">
-      <div class="tile-detail-header">
+    <div class="tile-readout">
+      <div class="tile-readout-head">
         <div>
-          <div class="tile-detail-kicker">${isPlayer ? 'Current Tile' : 'Surveyed Tile'}</div>
-          <h3 class="tile-detail-title">${escHtml(glyph)} ${escHtml(area.name)}</h3>
+          <div class="tile-readout-kicker">${isPlayer ? 'Current Tile' : 'Surveyed Tile'}</div>
+          <h3 class="tile-readout-title">${escHtml(glyph)} ${escHtml(area.name)}</h3>
           <div class="tile-detail-meta">${chips.join(' ')}</div>
         </div>
         <div class="tile-detail-glyph">${escHtml(glyph)}</div>
       </div>
 
-      <div class="tile-detail-status${isPlayer && isTraveling ? ' is-live' : ''}">${escHtml(statusMessage)}</div>
+      <div class="tile-readout-summary${isPlayer && isTraveling ? ' is-live' : ''}">${escHtml(statusMessage)}</div>
 
-      <div class="tile-detail-grid">
-        <div class="tile-section-card">
-          <div class="tile-section-label">Player Condition</div>
-          <div class="tile-section-value">${escHtml(playerStatusText)}</div>
-          <p class="tile-section-copy">Track your live health and resource readiness before committing to the next move.</p>
+      <div class="tile-readout-strip">
+        <div class="tile-readout-line">
+          <div class="tile-readout-line-label">Condition</div>
+          <div class="tile-readout-line-value">${escHtml(playerStatusText)}</div>
         </div>
-        <div class="tile-section-card">
-          <div class="tile-section-label">Live World Clock</div>
-          <div class="tile-section-value">${escHtml(liveClockText)}</div>
-          <p class="tile-section-copy">This clock helps anchor day/night events, travel phases, and timed service actions.</p>
+        <div class="tile-readout-line">
+          <div class="tile-readout-line-label">Clock</div>
+          <div class="tile-readout-line-value">${escHtml(liveClockText)}</div>
+        </div>
+        <div class="tile-readout-line">
+          <div class="tile-readout-line-label">Threat</div>
+          <div class="tile-readout-line-value">${escHtml(dangerLabel)}</div>
+        </div>
+        <div class="tile-readout-line">
+          <div class="tile-readout-line-label">View</div>
+          <div class="tile-readout-line-value">${_viewMode === 'local' && isPlayer ? 'Local field active' : 'World map active'}</div>
         </div>
       </div>
 
-      ${intelMarkup ? `<div class="tile-intel-list">${intelMarkup}</div>` : '<div class="world-empty-note">No obvious herbs, veins, drops, or roaming packs are surfacing on this exact tile yet.</div>'}
+      ${intelMarkup ? `<div class="tile-intel-inline-list">${intelMarkup}</div>` : '<div class="world-empty-note">No obvious herbs, veins, drops, or roaming packs are surfacing on this exact tile yet.</div>'}
 
       ${tile.afkable ? '<div class="tag-afk">⏳ Repeatable field loop marked on this tile</div>' : ''}
       ${actionButtons.length ? `<div class="world-action-row">${actionButtons.join('')}</div>` : ''}
