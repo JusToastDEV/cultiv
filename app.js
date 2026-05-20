@@ -57,6 +57,8 @@ let _guestMode = false;
 let _travelReadyAt = 0;      // epoch ms when next tile move is allowed
 let _travelTimerInterval = null; // setInterval handle for travel countdown
 let _selectedWorldTile = null;
+let _selectedTileSite = null;
+let _travelRoute = null;
 
 // Realm names for display
 const REALM_NAMES = [
@@ -215,7 +217,7 @@ function enterGuestMode() {
   setAuthError('login', '');
   setAuthError('register', '');
   showScreen('game');
-  activatePanel('cultivate');
+  activatePanel('explore');
   updateTopbarLogoutLabel();
   showToast('Guest mode active. Progress stays in this browser until you sign into a live account.', 'warn');
 }
@@ -491,7 +493,7 @@ async function selectCharacter(charId) {
   }
 
   showScreen('game');
-  activatePanel('cultivate');
+  activatePanel('explore');
   updateTopbarLogoutLabel();
   renderAll();
   startPolling();
@@ -542,6 +544,7 @@ function setupNavigation() {
 }
 
 function activatePanel(panelId) {
+  if (panelId === 'city') panelId = 'explore';
   document.querySelectorAll('.nav-item').forEach(i => i.classList.toggle('active', i.dataset.panel === panelId));
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === `panel-${panelId}`));
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('hidden', p.id !== `panel-${panelId}`));
@@ -892,24 +895,24 @@ async function doAction(action, options = {}) {
   renderAll();
   appendToLog((r.data.result || []).join(' '));
   showToast((r.data.result || ['Done.']).join(' '), 'ok');
-
-  // Also update the legacy event log if it exists
-  const legacyLog = document.getElementById('event-log');
-  if (legacyLog) {
-    const li = document.createElement('li');
-    li.textContent = (r.data.result || []).join(' ');
-    legacyLog.prepend(li);
-    while (legacyLog.children.length > 20) legacyLog.lastElementChild.remove();
-  }
 }
 
 function appendToLog(text) {
   const log = document.getElementById('event-log');
-  if (!log) return;
-  const li = document.createElement('li');
-  li.textContent = text;
-  log.prepend(li);
-  while (log.children.length > 30) log.lastElementChild.remove();
+  if (log) {
+    const li = document.createElement('li');
+    li.textContent = text;
+    log.prepend(li);
+    while (log.children.length > 30) log.lastElementChild.remove();
+  }
+
+  const compact = document.getElementById('event-log-compact');
+  if (compact) {
+    const li = document.createElement('li');
+    li.textContent = text;
+    compact.prepend(li);
+    while (compact.children.length > 8) compact.lastElementChild.remove();
+  }
 }
 
 // ── Tile-based World Map ───────────────────────────────────────
@@ -1246,6 +1249,483 @@ function countVisitedTiles(visited, regionId) {
   return count;
 }
 
+function getTileIdentity(tile, x, y) {
+  return `${tile.areaId || tile.cityId || tile.t}:${x}:${y}`;
+}
+
+function getActiveTravelRoute() {
+  if (!_travelRoute) return null;
+  if (_travelRoute.readyAt <= Date.now()) return null;
+  return _travelRoute;
+}
+
+function getTravelProgress(route = getActiveTravelRoute()) {
+  if (!route) return 1;
+  const total = Math.max(1, route.readyAt - route.startedAt);
+  return Math.max(0, Math.min(1, (Date.now() - route.startedAt) / total));
+}
+
+function getVisualTravelPosition(route = getActiveTravelRoute()) {
+  if (!route) {
+    return { x: _gameState?.tileX ?? 9, y: _gameState?.tileY ?? 6 };
+  }
+  const progress = getTravelProgress(route);
+  return {
+    x: route.fromX + (route.toX - route.fromX) * progress,
+    y: route.fromY + (route.toY - route.fromY) * progress
+  };
+}
+
+function makeLocalSite(tileKey, key, name, glyph, kind, desc, actionHint) {
+  return { id: `${tileKey}:${key}`, key, name, glyph, kind, desc, actionHint };
+}
+
+function buildLocalTileSites(tile, x, y) {
+  const tileKey = getTileIdentity(tile, x, y);
+  switch (tile.t) {
+    case 'C':
+      return [
+        makeLocalSite(tileKey, 'gate', 'Main Gate', '⛩', 'civic', 'Patrols, toll-keepers, and arriving caravans define the gate quarter.', 'cityAffairs'),
+        makeLocalSite(tileKey, 'market', 'Market Row', '¤', 'trade', 'Merchants cycle silver, rumor, and supply caches through the market lanes.', 'cityAffairs'),
+        makeLocalSite(tileKey, 'vault', 'Vault Ward', '◫', 'vault', 'Ledger clerks and guarded counters handle deposits and sealed withdrawals.', 'bank'),
+        makeLocalSite(tileKey, 'sect', 'Sect Court', '☷', 'sect', 'Outer court recruiters, disputes, and faction petitions are heard here.', 'cityAffairs'),
+        makeLocalSite(tileKey, 'plaza', 'Spirit Plaza', '◎', 'spirit', 'This central square anchors notices, escorts, and public cultivation traffic.', 'spirit'),
+        makeLocalSite(tileKey, 'archive', 'Technique Archive', '☰', 'archive', 'Manual copies, scripture racks, and cultivation notes flow through the archive.', 'techniques'),
+        makeLocalSite(tileKey, 'tavern', 'Tavern Row', '♨', 'rumor', 'Travelers trade contracts, grudges, and duel gossip across tavern tables.', 'patron'),
+        makeLocalSite(tileKey, 'relay', 'Courier Post', '✉', 'relay', 'Dispatches, sect letters, and player traffic would converge at this relay.', 'cityAffairs'),
+        makeLocalSite(tileKey, 'outskirts', 'Outskirts', '↠', 'travel', 'The settlement hands back off into roads, watchpaths, and nearby wilderness.', 'areaIntel')
+      ];
+    case 'H':
+      return [
+        makeLocalSite(tileKey, 'dewline', 'Dewline Path', '✿', 'gather', 'A narrow route where the freshest blooms condense before sunrise.', 'herbs'),
+        makeLocalSite(tileKey, 'shelf', 'Shade Shelf', '❋', 'gather', 'Shadowed growth pockets hold the more fragile cultivational herbs.', 'herbs'),
+        makeLocalSite(tileKey, 'spring', 'Spring Cut', '◌', 'spirit', 'Wet ground and faint qi currents make this patch a good gathering point.', 'spirit'),
+        makeLocalSite(tileKey, 'trail', 'Gather Trail', '⋰', 'travel', 'The footpath loops between herb beds and escape cover.', 'areaIntel'),
+        makeLocalSite(tileKey, 'hollow', 'Root Hollow', '◈', 'gather', 'This center hollow is where repeated harvest loops would converge.', 'herbs'),
+        makeLocalSite(tileKey, 'watch', 'Watch Ridge', '⌁', 'lookout', 'A small rise gives line of sight over poachers and passing beasts.', 'mobs'),
+        makeLocalSite(tileKey, 'mud', 'Spirit Mud', '∴', 'spirit', 'Qi-rich silt clings to roots and draws better quality forage.', 'spirit'),
+        makeLocalSite(tileKey, 'bloom', 'Bloom Knot', '❀', 'gather', 'Dense clusters show where multi-node harvest logic should later spawn.', 'herbs'),
+        makeLocalSite(tileKey, 'egress', 'Backtrail', '↘', 'travel', 'The fastest retreat route if another cultivator contests the patch.', 'areaIntel')
+      ];
+    case 'K':
+      return [
+        makeLocalSite(tileKey, 'mouth', 'Mine Mouth', '⛏', 'ore', 'The entrance lip is where mining crews would stage before committing deeper.', 'ores'),
+        makeLocalSite(tileKey, 'shaft', 'Side Shaft', '⌬', 'ore', 'A secondary cut branches toward smaller seams and unstable rock.', 'ores'),
+        makeLocalSite(tileKey, 'vent', 'Vent Crack', '⋱', 'hazard', 'Heat or pressure escapes here, making the route dangerous but valuable.', 'spirit'),
+        makeLocalSite(tileKey, 'camp', 'Lantern Camp', '⌂', 'camp', 'A rest node for miners, escorts, and ambushes waiting on exit traffic.', 'mobs'),
+        makeLocalSite(tileKey, 'seam', 'Primary Seam', '◈', 'ore', 'The richest vein or extraction target sits in the center of the tunnel web.', 'ores'),
+        makeLocalSite(tileKey, 'crack', 'Deep Crack', '⋄', 'hazard', 'This fracture hints at deeper content once hazard-gated cave travel lands.', 'areaIntel'),
+        makeLocalSite(tileKey, 'scaffold', 'Scaffold Ring', '☷', 'ore', 'Temporary bracing and salvage piles suggest repeatable resource loops.', 'ores'),
+        makeLocalSite(tileKey, 'heap', 'Spoil Heap', '▣', 'salvage', 'Discarded stone often hides lower-tier loot or overlooked fragments.', 'ores'),
+        makeLocalSite(tileKey, 'exit', 'Tunnel Egress', '↗', 'travel', 'A narrow exit channel is ideal for interceptions or companion screening.', 'areaIntel')
+      ];
+    case 'X':
+      return [
+        makeLocalSite(tileKey, 'gate', 'Cracked Gate', '✦', 'ruin', 'The broken threshold is where wards, traps, and scavengers first surface.', 'areaIntel'),
+        makeLocalSite(tileKey, 'court', 'Collapsed Court', '⌘', 'ruin', 'The outer court still holds fragments of formations and broken statuary.', 'mobs'),
+        makeLocalSite(tileKey, 'archive', 'Dust Archive', '☰', 'relic', 'Collapsed shelves and scattered records hint at relic-grade drops.', 'areaIntel'),
+        makeLocalSite(tileKey, 'stairs', 'Watch Stairs', '⋰', 'lookout', 'A partial vantage point for scouting rival cultivators around the ruin.', 'mobs'),
+        makeLocalSite(tileKey, 'dais', 'Glyph Dais', '◈', 'relic', 'The ruin center is where live zone node content should eventually resolve.', 'areaIntel'),
+        makeLocalSite(tileKey, 'crypt', 'Undercroft', '⬖', 'hazard', 'A deeper chamber suggests boss, relic, or ambush hooks.', 'mobs'),
+        makeLocalSite(tileKey, 'rubble', 'Rubble Pass', '▤', 'travel', 'Loose stone makes escape slow and noisy.', 'areaIntel'),
+        makeLocalSite(tileKey, 'cache', 'Reliquary Niche', '☲', 'relic', 'A sealed wall pocket is ideal for cache-style exploration rewards.', 'areaIntel'),
+        makeLocalSite(tileKey, 'pilgrim', 'Pilgrim Path', '↘', 'travel', 'The outbound line where other parties may pass the ruin.', 'areaIntel')
+      ];
+    case 'V':
+      return [
+        makeLocalSite(tileKey, 'well', 'Qi Well', '◎', 'spirit', 'A visible pulse in the terrain marks the strongest spiritual draw.', 'spirit'),
+        makeLocalSite(tileKey, 'mist', 'Mist Bank', '◌', 'spirit', 'Qi fog pools low here, ideal for detecting resonance shifts.', 'spirit'),
+        makeLocalSite(tileKey, 'crystal', 'Crystal Lip', '◈', 'spirit', 'Condensed essence hardens near exposed crystal growth.', 'spirit'),
+        makeLocalSite(tileKey, 'shelf', 'Meditation Shelf', '☯', 'cultivation', 'A flat ledge suited for later on-tile cultivation actions.', 'spirit'),
+        makeLocalSite(tileKey, 'heart', 'Convergence Heart', '✺', 'spirit', 'The vein center is where the strongest local cultivation multiplier will matter.', 'spirit'),
+        makeLocalSite(tileKey, 'fracture', 'Fracture Edge', '⋄', 'hazard', 'Cracked stone suggests unstable qi surges and contested access.', 'mobs'),
+        makeLocalSite(tileKey, 'wind', 'Wind Cut', '⌁', 'lookout', 'A clear edge where scouts can watch the surrounding terrain.', 'areaIntel'),
+        makeLocalSite(tileKey, 'pool', 'Still Pool', '◍', 'spirit', 'A calm pocket where rare materials might later condense.', 'spirit'),
+        makeLocalSite(tileKey, 'path', 'Vein Perimeter', '↗', 'travel', 'The outer ring is where escorts, players, and rivals would cross paths.', 'areaIntel')
+      ];
+    case 'B':
+      return [
+        makeLocalSite(tileKey, 'trail', 'Scent Trail', '⊛', 'hunt', 'Fresh tracks point to the beast routes radiating from the den.', 'mobs'),
+        makeLocalSite(tileKey, 'bones', 'Bone Scatter', '☠', 'hunt', 'Old kills and broken carcasses mark where the pack feeds.', 'mobs'),
+        makeLocalSite(tileKey, 'brush', 'Brush Cover', '♣', 'ambush', 'Dense cover makes this edge ideal for stalking or being stalked.', 'mobs'),
+        makeLocalSite(tileKey, 'watch', 'Kill Ridge', '⌁', 'lookout', 'A rise where companions or rivals could spot the lair first.', 'areaIntel'),
+        makeLocalSite(tileKey, 'den', 'Den Heart', '◈', 'hunt', 'The center lair should later host the most valuable live encounter hook.', 'mobs'),
+        makeLocalSite(tileKey, 'camp', 'Hunter Camp', '⌂', 'camp', 'A temporary foothold for resting, baiting, or tracking.', 'mobs'),
+        makeLocalSite(tileKey, 'rut', 'Rut Ring', '⋱', 'hunt', 'Heavy traffic wears the soil into clear pursuit lines.', 'mobs'),
+        makeLocalSite(tileKey, 'escape', 'Escape Cut', '↘', 'travel', 'A fast line out if another party or player contests the kill.', 'areaIntel'),
+        makeLocalSite(tileKey, 'overlook', 'Outer Overlook', '△', 'lookout', 'A perimeter point for spotting incoming cultivators.', 'areaIntel')
+      ];
+    case 'F':
+    case 'W':
+    case '.':
+    case 'R':
+    default:
+      return [
+        makeLocalSite(tileKey, 'trail', tile.t === 'R' ? 'Trade Path' : 'Scout Trail', '⋰', 'travel', 'The most reliable path through this tile for caravans, scouts, and parties.', 'areaIntel'),
+        makeLocalSite(tileKey, 'cover', 'Brush Line', '♣', 'cover', 'Light cover where gathering, hiding, or ambush checks would happen.', tile.herbs?.length ? 'herbs' : 'mobs'),
+        makeLocalSite(tileKey, 'spring', 'Field Spring', '◌', 'spirit', 'A damp pocket where qi or herbs tend to collect first.', tile.spiritDensity ? 'spirit' : (tile.herbs?.length ? 'herbs' : 'areaIntel')),
+        makeLocalSite(tileKey, 'camp', 'Waycamp', '⌂', 'camp', 'A staging spot for recovery, escort regrouping, or roadside events.', 'cityAffairs'),
+        makeLocalSite(tileKey, 'heart', 'Tile Heart', '◈', 'field', 'The center of the tile should later resolve its most important on-site content.', tile.areaId ? 'areaIntel' : (tile.mobs?.length ? 'mobs' : 'areaIntel')),
+        makeLocalSite(tileKey, 'watch', 'Lookout Rise', '⌁', 'lookout', 'The cleanest line of sight across nearby traffic and territorial movement.', tile.mobs?.length ? 'mobs' : 'areaIntel'),
+        makeLocalSite(tileKey, 'gather', 'Gather Patch', '✿', 'gather', 'A small resource knot where quick field loops can start.', tile.herbs?.length ? 'herbs' : (tile.ores?.length ? 'ores' : 'areaIntel')),
+        makeLocalSite(tileKey, 'drift', 'Drift Edge', '⋄', 'hazard', 'Unstable ground that hints at hazards, hidden seams, or encounter pressure.', tile.ores?.length ? 'ores' : 'mobs'),
+        makeLocalSite(tileKey, 'egress', 'Forward Egress', '↗', 'travel', 'The exit line toward the next frontier tile and future pass-by events.', 'areaIntel')
+      ];
+  }
+}
+
+function getLocalSiteActions(site, tile, x, y) {
+  const actions = [];
+  const isCurrentTile = x === (_gameState?.tileX ?? 9)
+    && y === (_gameState?.tileY ?? 6)
+    && _travelReadyAt <= Date.now();
+
+  if (isCurrentTile && ['herbs', 'ores', 'mobs', 'spirit'].includes(site.actionHint)) {
+    actions.push({
+      label: site.actionHint === 'herbs'
+        ? 'Forage Now'
+        : site.actionHint === 'ores'
+          ? 'Mine Now'
+          : site.actionHint === 'mobs'
+            ? 'Hunt Now'
+            : 'Resonate Now',
+      kind: 'primary',
+      action: `performTileFieldAction('${site.actionHint}', ${x}, ${y})`
+    });
+  }
+  if (isCurrentTile && !actions.length && (tile.t === 'X' || tile.drops?.length) && site.actionHint === 'areaIntel') {
+    actions.push({ label: 'Scavenge', kind: 'primary', action: `performTileFieldAction('relic', ${x}, ${y})` });
+  }
+
+  if (tile.areaId && site.actionHint !== 'bank' && site.actionHint !== 'techniques' && site.actionHint !== 'patron' && site.actionHint !== 'cityAffairs') {
+    actions.push({ label: 'Area Intel', kind: actions.length ? 'ghost' : 'primary', action: `openZoneForArea('${tile.areaId}', ${x}, ${y})` });
+  }
+
+  const labelMap = {
+    bank: 'Open Vault',
+    techniques: 'Open Archive',
+    patron: 'Open Patron Hall',
+    cityAffairs: 'City Affairs',
+    herbs: 'Survey Herbs',
+    ores: 'Survey Veins',
+    mobs: 'Track Threats',
+    spirit: 'Qi Survey',
+    areaIntel: 'Scout Surroundings'
+  };
+
+  if (site.actionHint) {
+    actions.push({
+      label: labelMap[site.actionHint] || 'Inspect Site',
+      kind: actions.length ? 'ghost' : 'primary',
+      action: `openWorldService('${site.actionHint}', ${x}, ${y})`
+    });
+  }
+
+  if (tile.cityId && site.actionHint !== 'bank' && site.actionHint !== 'techniques' && site.actionHint !== 'patron') {
+    actions.push({ label: 'Settlement Dock', kind: 'ghost', action: `openWorldService('cityAffairs', ${x}, ${y})` });
+  }
+
+  return actions.slice(0, 3);
+}
+
+function inspectTileSite(siteId, x, y) {
+  const regionId = getRenderedRegionId(_gameState);
+  const tile = getRegionTile(regionId, x, y);
+  _selectedTileSite = { tileKey: getTileIdentity(tile, x, y), siteId };
+  renderLocalTileMap(tile, x, y);
+}
+
+function openWorldService(service, x, y) {
+  const regionId = getRenderedRegionId(_gameState);
+  const tile = getRegionTile(regionId, x, y);
+  switch (service) {
+    case 'bank':
+      document.getElementById('open-bank')?.click();
+      return;
+    case 'techniques':
+      document.getElementById('open-techniques')?.click();
+      return;
+    case 'patron':
+      document.getElementById('open-patron-hall')?.click();
+      return;
+    case 'cityAffairs':
+      doAction('cityAction', { service: tile.cityId || tile.areaId || 'field-affairs' });
+      return;
+    case 'herbs':
+    case 'ores':
+    case 'mobs':
+    case 'spirit':
+      previewWorldAction(service, x, y);
+      return;
+    case 'areaIntel':
+      if (tile.areaId) openZoneForArea(tile.areaId, x, y);
+      else focusWorldTile(x, y);
+      return;
+    default:
+      focusWorldTile(x, y);
+  }
+}
+
+async function performTileFieldAction(mode, x, y) {
+  if (_guestMode || !_character) return;
+  const currentX = _gameState?.tileX ?? 9;
+  const currentY = _gameState?.tileY ?? 6;
+  if (x !== currentX || y !== currentY) {
+    showToast('You need to stand on a tile before farming it.', 'warn');
+    return;
+  }
+  if (_travelReadyAt > Date.now()) {
+    showToast('Finish traveling before working the tile.', 'warn');
+    return;
+  }
+
+  const regionId = getRenderedRegionId(_gameState);
+  const tile = getRegionTile(regionId, x, y);
+  const r = await API.post('/api/game/action', {
+    action: 'fieldAction',
+    options: {
+      mode,
+      regionId,
+      x,
+      y,
+      terrainType: tile.t,
+      hazard: tile.hazard ?? 0,
+      spiritDensity: tile.spiritDensity ?? 0,
+      areaId: tile.areaId ?? null
+    }
+  });
+
+  if (!r.ok) {
+    showToast(r.data.error || 'Could not work this tile.', 'warn');
+    return;
+  }
+
+  _gameState = r.data.state ?? _gameState;
+  _cooldowns = r.data.cooldowns ?? _cooldowns;
+  renderAll();
+  appendToLog((r.data.result || []).join(' '));
+  showToast((r.data.result || [`${titleizeSlug(mode)} run complete.`]).join(' '), 'ok');
+  showTileInfo(tile, x, y, { statusMessage: `${titleizeSlug(mode)} cycle complete. This tile is now on personal recovery before the next run.` });
+}
+
+function renderLocalTileMap(tile, x, y) {
+  const grid = document.getElementById('world-local-grid');
+  const detail = document.getElementById('world-local-site-detail');
+  const summary = document.getElementById('world-site-summary');
+  if (!grid || !detail) return;
+
+  const sites = buildLocalTileSites(tile, x, y);
+  const tileKey = getTileIdentity(tile, x, y);
+  let selected = _selectedTileSite && _selectedTileSite.tileKey === tileKey
+    ? sites.find(site => site.id === _selectedTileSite.siteId)
+    : null;
+  if (!selected) selected = sites[4] || sites[0] || null;
+  if (!selected) return;
+
+  _selectedTileSite = { tileKey, siteId: selected.id };
+  if (summary) summary.textContent = `${getTileAreaProfile(tile).name} · 9 walkable site hooks`;
+
+  grid.innerHTML = sites.map(site => `
+    <button type="button" class="world-local-node kind-${site.kind}${site.id === selected.id ? ' is-active' : ''}" onclick="inspectTileSite('${site.id}', ${x}, ${y})">
+      <span class="world-local-node-glyph">${escHtml(site.glyph)}</span>
+      <span class="world-local-node-name">${escHtml(site.name)}</span>
+    </button>
+  `).join('');
+
+  const actions = getLocalSiteActions(selected, tile, x, y);
+  detail.innerHTML = `
+    <div class="world-site-detail-head">
+      <div>
+        <div class="tile-detail-kicker">Local Walk Node</div>
+        <h4 class="world-site-detail-title">${escHtml(selected.name)}</h4>
+      </div>
+      <span class="world-site-detail-glyph">${escHtml(selected.glyph)}</span>
+    </div>
+    <p class="tile-section-copy">${escHtml(selected.desc)}</p>
+    <div class="world-site-actions">
+      ${actions.map(action => `<button type="button" class="btn-sm ${action.kind === 'primary' ? 'btn-primary' : 'btn-ghost'}" onclick="${action.action}">${escHtml(action.label)}</button>`).join('')}
+    </div>
+  `;
+}
+
+function renderWorldQuestBoard(currentTile, selectedTile) {
+  const list = document.getElementById('available-events-list');
+  if (!list) return;
+
+  const quests = Array.isArray(_gameState?.questLog) ? _gameState.questLog : [];
+  const selectedArea = getTileAreaProfile(selectedTile);
+  const entries = [];
+
+  quests.forEach((quest, index) => {
+    if (typeof quest === 'string') {
+      entries.push({ title: quest, badgeLabel: 'active', rarity: 'uncommon', meta: 'Tracked from the live quest log.' });
+      return;
+    }
+    entries.push({
+      title: quest.title || quest.name || `Quest ${index + 1}`,
+      badgeLabel: quest.status || 'active',
+      rarity: quest.rarity || 'uncommon',
+      meta: quest.summary || quest.description || 'Active objective.'
+    });
+  });
+
+  entries.push({
+    title: `Survey ${selectedArea.name}`,
+    badgeLabel: 'field',
+    rarity: 'common',
+    meta: `Walk the local site grid, read the tile hooks, and stage the next live exploration pass for this ${selectedArea.focusLabel.toLowerCase()} tile.`
+  });
+
+  if (selectedTile.cityId) {
+    entries.push({
+      title: `Handle ${titleizeSlug(selectedTile.cityId)} traffic`,
+      badgeLabel: 'city',
+      rarity: 'common',
+      meta: 'Banking, archives, tavern rumors, and civic hooks now route through World instead of a separate city tab.'
+    });
+  }
+  if (selectedTile.mobs?.length) {
+    entries.push({
+      title: `Track ${titleizeSlug(selectedTile.mobs[0])}`,
+      badgeLabel: 'hunt',
+      rarity: 'uncommon',
+      meta: `Hostile traffic is already mapped here: ${selectedTile.mobs.map(titleizeSlug).join(', ')}.`
+    });
+  }
+  if (selectedTile.herbs?.length) {
+    entries.push({
+      title: `Harvest route reconnaissance`,
+      badgeLabel: 'gather',
+      rarity: 'common',
+      meta: `Known flora on this tile: ${selectedTile.herbs.map(titleizeSlug).join(', ')}.`
+    });
+  }
+  if (selectedTile.ores?.length) {
+    entries.push({
+      title: `Secure extraction line`,
+      badgeLabel: 'ore',
+      rarity: 'common',
+      meta: `This tile shows workable material: ${selectedTile.ores.map(titleizeSlug).join(', ')}.`
+    });
+  }
+  if (!entries.length) {
+    entries.push({ title: 'No active quests', badgeLabel: 'idle', rarity: 'common', meta: 'Rumors, faction contracts, and area leads will surface here once the next quest pass lands.' });
+  }
+
+  list.innerHTML = entries.map(entry => `
+    <li>
+      <div style="flex:1">
+        <div class="quest-line-title">
+          <span>${escHtml(entry.title)}</span>
+          <span class="quest-badge ${escHtml(entry.rarity || 'common')}">${escHtml(entry.badgeLabel)}</span>
+        </div>
+        <div class="quest-line-meta">${escHtml(entry.meta)}</div>
+      </div>
+    </li>
+  `).join('');
+}
+
+function renderWorldPresenceFeed(currentTile, selectedTile) {
+  const list = document.getElementById('world-presence-list');
+  const compact = document.getElementById('event-log-compact');
+  const route = getActiveTravelRoute();
+  const items = [];
+
+  if (route) {
+    const fromTile = getRegionTile(route.regionId, route.fromX, route.fromY);
+    const toTile = getRegionTile(route.regionId, route.toX, route.toY);
+    items.push({
+      title: 'Transit corridor active',
+      badgeLabel: 'travel',
+      rarity: 'uncommon',
+      meta: `Moving from ${fromTile.name || TILE_TERRAIN_NAMES[fromTile.t]} to ${toTile.name || TILE_TERRAIN_NAMES[toTile.t]}. This is where companion chatter, player pass-bys, and NPC interceptions should later resolve.`
+    });
+  }
+
+  const companions = Array.isArray(_gameState?.companions) ? _gameState.companions : [];
+  if (companions.length) {
+    items.push({ title: 'Companion escort', badgeLabel: `${companions.length}`, rarity: 'common', meta: 'Companion travel reactions will surface here once party movement is live.' });
+  } else {
+    items.push({ title: 'No escort assigned', badgeLabel: 'party', rarity: 'common', meta: 'Companions are not yet traveling with you. This card is where they will show up once party movement lands.' });
+  }
+
+  const rivals = Array.isArray(_gameState?.rivalNpcs) ? _gameState.rivalNpcs : [];
+  if (rivals.length) {
+    items.push({ title: 'Rival traces detected', badgeLabel: `${rivals.length}`, rarity: 'rare', meta: 'Named rival NPC pressure is already reserved in state and should eventually surface from this feed.' });
+  } else {
+    items.push({ title: 'Rival traffic quiet', badgeLabel: 'npc', rarity: 'common', meta: 'NPC world pressure is not resolving on this tile yet, but this is the surface where it should appear.' });
+  }
+
+  if (selectedTile.cityId || currentTile.cityId) {
+    const cityTile = selectedTile.cityId ? selectedTile : currentTile;
+    items.push({ title: `${cityTile.name} sovereignty`, badgeLabel: 'city', rarity: 'common', meta: 'Settlement patrols, market crowding, and visiting players should eventually read from this same live presence lane.' });
+  }
+
+  if (list) {
+    list.innerHTML = items.map(entry => `
+      <li>
+        <div style="flex:1">
+          <div class="quest-line-title">
+            <span>${escHtml(entry.title)}</span>
+            <span class="quest-badge ${escHtml(entry.rarity || 'common')}">${escHtml(entry.badgeLabel)}</span>
+          </div>
+          <div class="quest-line-meta">${escHtml(entry.meta)}</div>
+        </div>
+      </li>
+    `).join('');
+  }
+
+  if (compact) {
+    const worldHistory = Array.isArray(_gameState?.worldEventHistory) ? _gameState.worldEventHistory : [];
+    const feed = [];
+    if (route) {
+      const toTile = getRegionTile(route.regionId, route.toX, route.toY);
+      feed.push(`Transit underway toward ${toTile.name || TILE_TERRAIN_NAMES[toTile.t]}.`);
+    }
+    worldHistory.slice(-5).forEach(entry => feed.push(typeof entry === 'string' ? entry : (entry?.text || entry?.title || 'World event recorded.')));
+    if (!feed.length) {
+      feed.push('World corridor feed is quiet. Future online-player and NPC pass-bys should surface here while you travel.');
+    }
+    compact.innerHTML = feed.map(line => `<li>${escHtml(line)}</li>`).join('');
+  }
+}
+
+function renderWorldServiceDock(tile, x, y) {
+  const card = document.getElementById('world-city-services-card');
+  const body = document.getElementById('world-city-services');
+  const title = document.getElementById('world-city-services-title');
+  if (!card || !body || !title) return;
+
+  if (!tile.cityId) {
+    card.classList.add('hidden');
+    body.innerHTML = '';
+    return;
+  }
+
+  card.classList.remove('hidden');
+  title.textContent = `${tile.name} Service Dock`;
+  body.innerHTML = `
+    <button type="button" class="btn-sm btn-primary" onclick="openWorldService('bank', ${x}, ${y})">Silver Vault</button>
+    <button type="button" class="btn-sm btn-ghost" onclick="openWorldService('techniques', ${x}, ${y})">Technique Archive</button>
+    <button type="button" class="btn-sm btn-ghost" onclick="openWorldService('patron', ${x}, ${y})">Patron Hall</button>
+    <button type="button" class="btn-sm btn-ghost" onclick="openWorldService('cityAffairs', ${x}, ${y})">City Affairs</button>
+  `;
+}
+
+function renderWorldSupportPanels(selectedTile, x, y) {
+  const regionId = getRenderedRegionId(_gameState);
+  const currentTile = getRegionTile(regionId, _gameState?.tileX ?? 9, _gameState?.tileY ?? 6);
+  renderLocalTileMap(selectedTile, x, y);
+  renderWorldQuestBoard(currentTile, selectedTile);
+  renderWorldPresenceFeed(currentTile, selectedTile);
+  renderWorldServiceDock(selectedTile.cityId ? selectedTile : currentTile, x, y);
+
+  const log = document.getElementById('event-log');
+  if (log && !log.children.length) {
+    log.innerHTML = '<li>World actions, travel notes, and exploration results will gather here.</li>';
+  }
+}
+
 function focusWorldTile(x, y) {
   const regionId = getRenderedRegionId(_gameState);
   const tile = getRegionTile(regionId, x, y);
@@ -1257,16 +1737,16 @@ function previewWorldAction(kind, x, y) {
   const tile = getRegionTile(regionId, x, y);
   const profiles = {
     herbs: tile.herbs?.length
-      ? `You trace the herb routes here: ${tile.herbs.map(titleizeSlug).join(', ')}. Harvest actions are the next backend pass, but this tile is already marked as a live herb pocket.`
+      ? `You trace the herb routes here: ${tile.herbs.map(titleizeSlug).join(', ')}. Stand on this tile to run a live forage cycle from the World surface.`
       : 'No active herb signals are surfacing on this tile.',
     ores: tile.ores?.length
-      ? `The exposed seams suggest ${tile.ores.map(titleizeSlug).join(', ')}. Mining hooks are next, but this tile is already flagged as a workable vein.`
+      ? `The exposed seams suggest ${tile.ores.map(titleizeSlug).join(', ')}. Stand on this tile to mine it directly from the World surface.`
       : 'No exposed ore seams are visible here.',
     mobs: tile.mobs?.length
-      ? `Beast sign is heavy here: ${tile.mobs.map(titleizeSlug).join(', ')}. Encounter hooks still need a server pass, but this tile is already tagged for hostile activity.`
+      ? `Beast sign is heavy here: ${tile.mobs.map(titleizeSlug).join(', ')}. Stand on this tile to run a provisional live hunt loop.`
       : 'No active beast trails are obvious right now.',
     spirit: tile.spiritDensity
-      ? `Qi gathers around this tile at density ×${tile.spiritDensity}. Dedicated location-based cultivation bonuses are next, but this is already a meaningful spiritual node.`
+      ? `Qi gathers around this tile at density ×${tile.spiritDensity}. Stand on this tile to resonate with it for a live extraction cycle.`
       : 'Ambient qi is flat here compared with nearby spirit nodes.',
     city: tile.cityId
       ? `${titleizeSlug(tile.cityId)} is currently acting as a service anchor. The full navigable city-grid rework is next, but this tile is already the settlement access point.`
@@ -1281,9 +1761,11 @@ function renderWorldHud(regionId, px, py, visited) {
   const travelEl = document.getElementById('world-travel-state');
   const exploredEl = document.getElementById('world-explored-count');
   const nearbyEl = document.getElementById('world-nearby');
+  const route = getActiveTravelRoute();
 
   const currentTile = getRegionTile(regionId, px, py);
   const currentArea = getTileAreaProfile(currentTile);
+  const destinationTile = route ? getRegionTile(regionId, route.toX, route.toY) : currentTile;
   const regionName = ({
     'ashen-frontier': 'Ashen Frontier',
     'jade-delta': 'Jade Delta',
@@ -1293,12 +1775,14 @@ function renderWorldHud(regionId, px, py, visited) {
     'sovereign-wastes': 'Sovereign Wastes'
   })[regionId] ?? titleizeSlug(regionId);
   const travelRem = Math.max(0, _travelReadyAt - Date.now());
+  const anchorX = route ? route.toX : px;
+  const anchorY = route ? route.toY : py;
 
-  if (posEl) posEl.textContent = `${regionName} · ${px},${py}`;
-  if (areaEl) areaEl.textContent = currentArea.name;
+  if (posEl) posEl.textContent = route ? `${regionName} · transit corridor` : `${regionName} · ${px},${py}`;
+  if (areaEl) areaEl.textContent = route ? `${destinationTile.name || TILE_TERRAIN_NAMES[destinationTile.t]} · destination` : currentArea.name;
   if (travelEl) {
-    travelEl.textContent = travelRem > 0
-      ? `Traveling · ${Math.ceil(travelRem / 1000)}s`
+    travelEl.textContent = route
+      ? `${Math.round(getTravelProgress(route) * 100)}% en route · ${Math.ceil(travelRem / 1000)}s`
       : 'Movement window open';
   }
   if (exploredEl) exploredEl.textContent = `${countVisitedTiles(visited, regionId)} tiles charted`;
@@ -1308,17 +1792,13 @@ function renderWorldHud(regionId, px, py, visited) {
     for (let dy = -1; dy <= 1; dy++) {
       for (let dx = -1; dx <= 1; dx++) {
         if (dx === 0 && dy === 0) continue;
-        const nx = px + dx;
-        const ny = py + dy;
+        const nx = anchorX + dx;
+        const ny = anchorY + dy;
         const tile = getRegionTile(regionId, nx, ny);
         if (tile.t === 'M') continue;
-        const vertical = dy < 0 ? 'N' : dy > 0 ? 'S' : '';
-        const horizontal = dx < 0 ? 'W' : dx > 0 ? 'E' : '';
-        const direction = `${vertical}${horizontal}` || 'Adj';
         const name = tile.name || TILE_TERRAIN_NAMES[tile.t] || 'Unknown';
         chips.push(
           `<button type="button" class="world-nearby-chip" onclick="focusWorldTile(${nx}, ${ny})">`
-          + `<span class="world-nearby-dir">${direction}</span>`
           + `<span class="world-nearby-name">${escHtml(name)}</span>`
           + `<span class="world-nearby-glyph">${escHtml(TILE_GLYPHS[tile.t] ?? '·')}</span>`
           + `</button>`
@@ -1350,6 +1830,8 @@ function renderTileMap() {
   const mapW = regionId === 'ashen-frontier' ? AF_W : 10;
   const mapH = regionId === 'ashen-frontier' ? AF_H : 10;
   const isTraveling = _travelReadyAt > Date.now();
+  const travelRoute = getActiveTravelRoute();
+  const visualPos = getVisualTravelPosition(travelRoute);
   const selectedTile = _selectedWorldTile && _selectedWorldTile.regionId === regionId
     ? _selectedWorldTile
     : { regionId, x: px, y: py };
@@ -1362,12 +1844,14 @@ function renderTileMap() {
     for (let x = 0; x < mapW; x++) {
       const tile     = getRegionTile(regionId, x, y);
       const vKey     = `${regionId}:${x}:${y}`;
-      const isPlayer = (x === px && y === py);
+      const isPlayer = !travelRoute && (x === px && y === py);
       const isAdj    = !isPlayer && Math.abs(x - px) <= 1 && Math.abs(y - py) <= 1;
       const isVis    = visited.has(vKey) || isPlayer;
       const inFog    = !isVis && !isAdj;
       const canMove  = isAdj && tile.t !== 'M' && !isTraveling;
       const isSelected = selectedTile.x === x && selectedTile.y === y;
+      const isTravelOrigin = travelRoute && x === travelRoute.fromX && y === travelRoute.fromY;
+      const isTravelTarget = travelRoute && x === travelRoute.toX && y === travelRoute.toY;
 
       const div = document.createElement('div');
       let cls = `tile t-${tile.t === '.' ? 'dot' : tile.t}`;
@@ -1377,6 +1861,8 @@ function renderTileMap() {
       if (canMove)  cls += ' t-adj';
       if (isVis && !isPlayer) cls += ' t-visited';
       if (isSelected) cls += ' t-selected';
+      if (isTravelOrigin) cls += ' t-travel-origin';
+      if (isTravelTarget) cls += ' t-travel-target';
       // City-specific color class
       if (tile.t === 'C' && tile.cityId) cls += ` city-${tile.cityId}`;
       // Area biome class for color variety
@@ -1398,9 +1884,22 @@ function renderTileMap() {
   // Center viewport on player
   const vpW = wrap.clientWidth  || 600;
   const vpH = wrap.clientHeight || 440;
-  const offsetX = Math.round(vpW / 2 - (px + 0.5) * TILE_SIZE);
-  const offsetY = Math.round(vpH / 2 - (py + 0.5) * TILE_SIZE);
+  const offsetX = Math.round(vpW / 2 - (visualPos.x + 0.5) * TILE_SIZE);
+  const offsetY = Math.round(vpH / 2 - (visualPos.y + 0.5) * TILE_SIZE);
   grid.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+
+  const marker = document.getElementById('tile-travel-marker');
+  if (marker) {
+    wrap.classList.toggle('is-traveling', Boolean(travelRoute));
+    if (travelRoute) {
+      const angle = Math.atan2(travelRoute.toY - travelRoute.fromY, travelRoute.toX - travelRoute.fromX) * (180 / Math.PI);
+      marker.classList.add('active');
+      marker.innerHTML = `<span class="tile-travel-marker-core" style="transform:rotate(${angle}deg)">➤</span>`;
+    } else {
+      marker.classList.remove('active');
+      marker.innerHTML = '';
+    }
+  }
 
   // Update realm label
   const realmLabel = document.getElementById('explore-realm-label');
@@ -1425,6 +1924,8 @@ async function moveTile(x, y) {
   const now = Date.now();
   const renderedRegionId = getRenderedRegionId(_gameState);
   const tile = getRegionTile(renderedRegionId, x, y);
+  const fromX = _gameState?.tileX ?? 9;
+  const fromY = _gameState?.tileY ?? 6;
   if (_travelReadyAt > now) {
     const secs = Math.ceil((_travelReadyAt - now) / 1000);
     showTileInfo(tile, x, y, { statusMessage: `Still traveling… ${secs}s until movement opens again.` });
@@ -1443,14 +1944,33 @@ async function moveTile(x, y) {
   _gameState = r.data.state ?? _gameState;
   if (r.data.travelCooldown > 0) {
     _travelReadyAt = Date.now() + r.data.travelCooldown;
+    _travelRoute = {
+      regionId: renderedRegionId,
+      fromX,
+      fromY,
+      toX: x,
+      toY: y,
+      startedAt: Date.now(),
+      readyAt: Date.now() + r.data.travelCooldown
+    };
     startTravelTimer();
+  } else {
+    _travelRoute = null;
   }
   _selectedWorldTile = { regionId: renderedRegionId, x, y };
   renderTileMap();
-  showTileInfo(tile, x, y, { statusMessage: 'You arrive and take stock of the terrain.' });
+  showTileInfo(tile, x, y, {
+    statusMessage: 'Transit engaged. You are moving through this corridor now, not snapping straight into a finished arrival.'
+  });
 }
 
 function startTravelTimer() {
+  if (!_travelRoute && _travelReadyAt > Date.now()) {
+    const regionId = getRenderedRegionId(_gameState);
+    const x = _gameState?.tileX ?? 9;
+    const y = _gameState?.tileY ?? 6;
+    _travelRoute = { regionId, fromX: x, fromY: y, toX: x, toY: y, startedAt: Date.now(), readyAt: _travelReadyAt };
+  }
   clearInterval(_travelTimerInterval);
   _travelTimerInterval = setInterval(() => {
     const rem = _travelReadyAt - Date.now();
@@ -1460,10 +1980,11 @@ function startTravelTimer() {
       const regionId = getRenderedRegionId(_gameState);
       const x = _gameState?.tileX ?? 9;
       const y = _gameState?.tileY ?? 6;
+      _travelRoute = null;
       _selectedWorldTile = { regionId, x, y };
       renderTileMap();
       showTileInfo(getRegionTile(regionId, x, y), x, y, {
-        statusMessage: 'You arrive. The tile inspector has refreshed with the local field read.'
+        statusMessage: 'You have arrived and settled into the tile. Local walk nodes, quests, and service hooks are live below.'
       });
       return;
     }
@@ -1477,6 +1998,7 @@ function showTileInfo(tile, x, y, options = {}) {
 
   const regionId = options.regionId ?? getRenderedRegionId(_gameState);
   _selectedWorldTile = { regionId, x, y };
+  const travelRoute = getActiveTravelRoute();
 
   const currentX = _gameState?.tileX ?? 9;
   const currentY = _gameState?.tileY ?? 6;
@@ -1490,8 +2012,15 @@ function showTileInfo(tile, x, y, options = {}) {
   const dangerLabel = tile.hazard
     ? (tile.hazard >= 6 ? 'Extreme threat' : tile.hazard >= 4 ? 'High threat' : tile.hazard >= 2 ? 'Mid threat' : 'Low threat')
     : 'Quiet ground';
+  const fromTile = travelRoute ? getRegionTile(regionId, travelRoute.fromX, travelRoute.fromY) : null;
+  const isTravelTarget = travelRoute && x === travelRoute.toX && y === travelRoute.toY;
+  const isTravelOrigin = travelRoute && x === travelRoute.fromX && y === travelRoute.fromY;
   const statusMessage = options.statusMessage
-    ?? (isPlayer && isTraveling
+    ?? (isTravelTarget
+      ? `Transit engaged from ${fromTile?.name || 'your previous tile'}. You are still crossing this corridor, so pass-by encounters and companion reactions can eventually resolve before arrival.`
+      : isTravelOrigin
+        ? `You have already departed this tile and are still exposed on the route out. ${travelSecs}s remain on the travel window.`
+        : isPlayer && isTraveling
       ? `Traveling… ${travelSecs}s until the next move window opens.`
       : isPlayer
         ? 'You are standing here. Inspect the field read, then use highlighted adjacent tiles to keep moving.'
@@ -1510,16 +2039,19 @@ function showTileInfo(tile, x, y, options = {}) {
     actionButtons.push(`<button type="button" class="btn-sm btn-primary" onclick="openZoneForArea('${tile.areaId}', ${x}, ${y})">Area Intel</button>`);
   }
   if (tile.herbs?.length) {
-    actionButtons.push(`<button type="button" class="btn-sm btn-ghost" onclick="previewWorldAction('herbs', ${x}, ${y})">Herb Routes</button>`);
+    actionButtons.push(`<button type="button" class="btn-sm ${isPlayer && !isTraveling ? 'btn-primary' : 'btn-ghost'}" onclick="${isPlayer && !isTraveling ? `performTileFieldAction('herbs', ${x}, ${y})` : `previewWorldAction('herbs', ${x}, ${y})`}">${isPlayer && !isTraveling ? 'Forage' : 'Herb Routes'}</button>`);
   }
   if (tile.ores?.length) {
-    actionButtons.push(`<button type="button" class="btn-sm btn-ghost" onclick="previewWorldAction('ores', ${x}, ${y})">Ore Survey</button>`);
+    actionButtons.push(`<button type="button" class="btn-sm ${isPlayer && !isTraveling ? 'btn-primary' : 'btn-ghost'}" onclick="${isPlayer && !isTraveling ? `performTileFieldAction('ores', ${x}, ${y})` : `previewWorldAction('ores', ${x}, ${y})`}">${isPlayer && !isTraveling ? 'Mine' : 'Ore Survey'}</button>`);
   }
   if (tile.mobs?.length) {
-    actionButtons.push(`<button type="button" class="btn-sm btn-ghost" onclick="previewWorldAction('mobs', ${x}, ${y})">Track Threats</button>`);
+    actionButtons.push(`<button type="button" class="btn-sm ${isPlayer && !isTraveling ? 'btn-primary' : 'btn-ghost'}" onclick="${isPlayer && !isTraveling ? `performTileFieldAction('mobs', ${x}, ${y})` : `previewWorldAction('mobs', ${x}, ${y})`}">${isPlayer && !isTraveling ? 'Hunt' : 'Track Threats'}</button>`);
+  }
+  if (tile.drops?.length || tile.t === 'X') {
+    actionButtons.push(`<button type="button" class="btn-sm ${isPlayer && !isTraveling ? 'btn-primary' : 'btn-ghost'}" onclick="${isPlayer && !isTraveling ? `performTileFieldAction('relic', ${x}, ${y})` : tile.areaId ? `openZoneForArea('${tile.areaId}', ${x}, ${y})` : `focusWorldTile(${x}, ${y})`}">${isPlayer && !isTraveling ? 'Scavenge' : 'Relic Intel'}</button>`);
   }
   if (tile.spiritDensity) {
-    actionButtons.push(`<button type="button" class="btn-sm btn-ghost" onclick="previewWorldAction('spirit', ${x}, ${y})">Qi Survey</button>`);
+    actionButtons.push(`<button type="button" class="btn-sm ${isPlayer && !isTraveling ? 'btn-primary' : 'btn-ghost'}" onclick="${isPlayer && !isTraveling ? `performTileFieldAction('spirit', ${x}, ${y})` : `previewWorldAction('spirit', ${x}, ${y})`}">${isPlayer && !isTraveling ? 'Resonate' : 'Qi Survey'}</button>`);
   }
   if (tile.cityId) {
     actionButtons.push(`<button type="button" class="btn-sm btn-ghost" onclick="previewWorldAction('city', ${x}, ${y})">City Hooks</button>`);
@@ -1571,6 +2103,8 @@ function showTileInfo(tile, x, y, options = {}) {
       ${tile.areaId ? '<div class="tile-detail-footnote">Area intel now falls back to local map metadata instead of collapsing into a dead-end when no dedicated server zone seed exists yet.</div>' : ''}
     </div>
   `;
+
+  renderWorldSupportPanels(tile, x, y);
 }
 
 async function openZoneForArea(areaId, x, y) {
@@ -1690,7 +2224,9 @@ async function exploreNodeFromTile(nodeId, zoneId) {
 }
 
 function setupExplorePanel() {
-  // No drag setup needed — tile grid is static (centered on player)
+  document.getElementById('btn-city-affairs')?.addEventListener('click', () => {
+    openWorldService('cityAffairs', _gameState?.tileX ?? 9, _gameState?.tileY ?? 6);
+  });
 }
 
 async function loadZones() {

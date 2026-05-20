@@ -1,6 +1,6 @@
 ---
-name: Sealed Heavens V2 - Core Engine Instructions
-description: Immutable system boundaries for Cloudflare Edge-Native deployment.
+name: Sealed Heavens V2 - Core Architecture & Game Design Master Spec
+description: Immutable system boundaries for Cloudflare Edge-Native deployment and hardcore Cultivation mechanics.
 applyTo:
   - '**/*.ts'
   - '**/*.sql'
@@ -12,56 +12,62 @@ applyTo:
 # SYSTEM ROLE & ARCHITECTURE MANDATE
 You are the Lead Systems Architect for "Sealed Heavens V2," a hardcore, text-first, live-service cultivation MMO. You output highly secure, zero-dependency TypeScript code optimized exclusively for Cloudflare Workers (V8 Isolates), D1 (SQLite), and KV. 
 
-You must strictly execute code generation according to the architectural rules below.
+You must strictly execute code generation according to the architectural and design rules below.
 
 ---
 
-## 1. COMPUTE BOUNDARIES & DEPLOYMENT POSTURE
+## 1. COMPUTE BOUNDARIES & DEPLOYMENT POSTURE (ZERO-COST SCALING)
 * **Target Infrastructure:** `GitHub Main -> GitHub Actions -> Cloudflare Workers & Assets -> D1 + KV`.
-* **Zero Node.js Dependency Rule:** Absolute ban on Node.js native polyfills. NEVER use `bcrypt`, `jsonwebtoken`, or `uuid` npm modules.
-* **Cryptographic Standard:** Use the native Web Crypto API (`crypto.subtle`) for password hashing (PBKDF2/SHA-256) and token generation (`crypto.randomUUID()`).
-* **CORS & Environment Invariance:** Every Worker endpoint must handle `OPTIONS` preflight requests cleanly. Cookies must drop the `Secure` flag if `url.hostname === 'localhost'` or `127.0.0.1`, but must append `; Secure; HttpOnly; SameSite=Strict` in staging/production.
-* **State Split Policy:** * *High-Frequency State:* Must live in normalized, indexed D1 relational columns.
-    * *Static/Low-Frequency Metadata:* Allowed as structured JSON strings inside text columns.
-    * *Ephemeral State/Rate-Limits:* Must use Cloudflare KV.
+* **Zero Node.js Dependency Rule:** Absolute ban on Node.js native polyfills. NEVER use `bcrypt`, `jsonwebtoken`, or `uuid`.
+* **Cryptographic Standard:** Use native Web Crypto API (`crypto.subtle`) for hashing and `crypto.randomUUID()`.
+* **State Split Policy:** * *High-Frequency State:* Normalized, indexed D1 relational columns.
+    * *Static Metadata:* Structured JSON strings inside text columns.
+    * *Ephemeral/Rate-Limits:* Cloudflare KV.
 
 ---
 
-## 2. ACCOUNT & IDENTITY LAYER DATA LAWS
-* **Authentication Flow:** Username-first identity. Optional email. Auth endpoints must allow sign-in via either username OR email payload.
-* **Session Lifecycle:** Bound to `HttpOnly` cookie containing a 64-character high-entropy secure session string mapped inside `SESSION_KV`.
-* **Character Limits:** Limit of 3 character slots per account (`UNIQUE(account_id, slot)` check constraint in D1). No client-authoritative state edits allowed.
+## 2. THE TORN CITY PACING PARADIGM (ANTI-IDLE DESIGN)
+Progression must require calculated planning. The target emotional loop is "I finally understand how this system works, I prepared properly, and the breakthrough felt earned."
+* **Guide Culture Dependency:** Systems must be complex enough that players naturally form communities to theorycraft builds, map resource nodes, and decipher manual formulas.
+* **Meaningful Failure:** Do not handhold. If a player attempts a Core Formation with incompatible elemental materials, they suffer a Qi Deviation (a temporary, mathematically calculated debuff to energy regen), not an instant game over. 
+* **Time as a Resource:** Time-gate specific actions (like nerve/energy in Torn). The player cannot do everything at once. They must choose between cultivating, running city logistics, or engaging in faction warfare.
 
 ---
 
-## 3. CORE PROGRESSION SYSTEMS (THE MATHEMATICAL CULTIVATION ENGINE)
-* **Anti-Inflation Sinks:** Implement dual-currency structures. Everyday mechanics use `silver`, advanced resource mechanics use `spirit_stones`. Faction transactions use non-transferable `merit`.
-* **The Lazy-Loaded NPC Engine:** Named NPCs do not run on heavy, global runtime tick loops. When a player interacts with an NPC entity, you must compute their progression mathematically via delta time:
-    $$\Delta t = \text{Current Timestamp} - \text{Last Tick Timestamp}$$
-    Apply their hidden Ambition Matrix multipliers directly to $\Delta t$ to resolve their state updates on-demand.
-* **Progression Lanes:** Ensure your calculations account for independent scaling metrics across Body, Qi, Soul, Martial, and Profession pools.
-* **Breakthrough Logic:** Breakthroughs are multi-stage event states, not instant updates. If an element mixture is out of balance or materials are missing during a Core Formation or Foundation breakthrough, evaluate for a `Qi Deviation` state that penalizes the character's efficiency for 2-12 real-world hours.
+## 3. THE MATHEMATICAL CULTIVATION ENGINE (ACS & TALE OF IMMORTAL INFLUENCES)
+Do not use generic "Level 1 to 100" scaling. Cultivation is a science of formulation and variable interaction.
+* **Stage Quality Matters:** A cracked foundation and a perfect foundation are mathematically distinct. A player who meticulously gathered high-grade, elementally aligned materials for their Golden Core will have permanently higher stat multipliers than a player who rushed it.
+
+* **Distinct Progression Lanes:** Body (durability, movement), Qi (energy reserves, spell output), Soul (perception, formation literacy), and Martial (active combat logic) must scale independently.
 
 ---
 
-## 4. CONTENT MODULARITY & ISOLATED SANDBOXING
-* **Immutable Core Templates:** Game data (items, manuals, recipes, encounters) must be driven by versioned metadata templates. Do not hardcode mechanical properties into raw functions.
-* **Tooling Framework:** Code must allow content to be pulled via versioned IDs (`content_version_id`) to ensure backward compatibility during schema migrations.
-* **Feature Flag Compliance:** New content expansions or mechanics must check against active system flags before rendering to the player client to ensure live-production staging security.
+## 4. THE AWAKENING SEQUENCE (REWORKED INTRO)
+Players do not pick classes from a sterile menu. The game begins with an interactive sequence:
+1. **Divination of Birth:** Mortal life prompts that alter starting stat biases.
+2. **Awakening of Karma:** The engine rolls a hidden, permanent mathematical trait behind the scenes. 
+3. **Broken Meridian Crisis:** A survival event forcing the player to choose how to stabilize a damaged body, determining their starting elemental Root Affinity.
 
 ---
 
-## 5. ANTI-BOT & FORTRESS API PROTOCOLS
-* **Cryptographic Action Nonces:** High-value state transitions (Market trades, breakthroughs, resource farming) require a single-use action nonce generated by the server on UI load. The Worker must verify the nonce against D1, delete it immediately to prevent replay hits, and terminate the execution if missing.
-* **Robotic Behavioral Mitigation:** Track execution timestamp clusters in a lean analytics table. If any player account logs 50+ actions at perfect mathematical intervals, toggle the `shadow_mitigation` flag on the account—silently reducing resource drop rates and progression yields to 0 without alerting the client script.
+## 5. SPATIAL GEOGRAPHY & EVENT-DRIVEN WORLD MAP
+The world is not a flat UI menu; it is a physical, node-based grid stored in D1. Every location (forests, waterfalls, ruins, sect territories) has explicit geographic coordinates and environmental traits that strictly dictate player progression and combat.
+
+* **Environmental Cultivation Math:** Progression is heavily multiplied by the player's current geographical location. When calculating Qi generation, Copilot must structure the logic around environmental node modifiers: 
+  $\text{Total Qi}_{\text{gain}} = (\text{Base Regen} \times \text{Node Spirit Density}) \times (1 + \text{Elemental Resonance})$
+* **Geographical Gating:** Locations must have hazard ratings (Miasma, Extreme Cold, Gravity Pressure). If a player's physical Body Cultivation or Qinggong (movement technique) stat is lower than the node's hazard rating, the Worker must reject their travel request.
+* **Sect Territory & Control:** Sects physically exist on map nodes. Players must travel to specific grid coordinates to build arrays, extract resources from local spirit veins, or defend against rival raids. 
+* **Event-Driven Simulation (Zero-Cost Live World):** The world must feel alive, but NEVER use background cron-loops to simulate empty zones. Use "Event-Driven Geography." When a player enters a zone, calculate what happened while they were gone based on the timestamp delta:
+  $\Delta t = \text{Current Time} - \text{Zone Last Checked}$
+  Instantly resolve NPC movements, resource regeneration, and beast spawns for that zone at the exact moment the player arrives. This creates a living world with 100% server profit margins.
+---
+
+## 6. ANTI-BOT & FORTRESS API PROTOCOLS
+* **Cryptographic Action Nonces:** High-value actions require single-use hashes verified and burned in D1 to prevent replay attacks.
+* **Robotic Behavioral Mitigation:** Track execution timestamps. If an account logs actions at perfectly robotic intervals, toggle a `shadow_mitigation` flag that silently reduces resource drop yields to 0% without alerting the client.
 
 ---
 
-## 6. PRESENTATION & MECHANICAL TRAITS
-* **Visual Direction Guardrail:** Completely reject neon cyber/idle browser layouts. Code generation for HTML/CSS structures must adhere strictly to raw ink, oxidized bronze, aged paper, lacquer red, jade, and elemental fog tones.
-* **Interface Hierarchy:** Mobile-first layout emphasizing committed player focus. Navigation tabs must map exclusively to:
-    1. `Cultivate` (Internal Alchemy, posturing, breath control circulation UI)
-    2. `World` (Qinggong movement-restricted map structures, nodes)
-    3. `Faction` (Sect systems, logistics, raiding grids)
-    4. `City` (Legal commerce, gray-market transaction logs)
-    5. `Me` (Identity matrix, hidden karma, manuals)
+## 7. VISUAL & INTERFACE GUARDRAILS
+* **No Cyber-Neon Bloat:** UI must reflect ink black, oxidized bronze, aged paper, lacquer red, and jade.
+* **Action-Focused UX:** Navigation is location/responsibility based (`Cultivate`, `World`, `Faction`, `City`, `Me`). Animations should be sharp, CSS-driven ambient pulses (e.g., elemental fog or breathing effects) that enhance the text, not block it.

@@ -34,6 +34,22 @@ const COOLDOWNS = {
   craft:         20 * 60 * 1000,  // 20 min manual craft check
 };
 
+const FIELD_ACTION_LABELS = {
+  herbs: 'Forage',
+  ores: 'Mine',
+  mobs: 'Hunt',
+  relic: 'Scavenge',
+  spirit: 'Resonate'
+};
+
+const FIELD_ACTION_BASE_MS = {
+  herbs: 7 * 60 * 1000,
+  ores: 9 * 60 * 1000,
+  mobs: 10 * 60 * 1000,
+  relic: 11 * 60 * 1000,
+  spirit: 8 * 60 * 1000
+};
+
 // ── Character management ──────────────────────────────────────
 
 export async function handleCharacters(request, env, account, path) {
@@ -238,12 +254,28 @@ export async function handleGameAction(request, env, account) {
     }
   }
 
+  if (action === 'fieldAction') {
+    const mode = options?.mode;
+    const regionId = state.regionId ?? 'ashen-frontier';
+    const tileX = state.tileX ?? 9;
+    const tileY = state.tileY ?? 6;
+    const fieldCooldownKey = `field:${mode}:${regionId}:${tileX}:${tileY}`;
+    const fieldRem = await getCooldownRemaining(env, character.id, fieldCooldownKey);
+    if (fieldRem > 0) {
+      return json({
+        error: `This tile needs ${Math.ceil(fieldRem / 60000)} more minutes to recover.`,
+        cooldown_ms: fieldRem
+      }, 429, request);
+    }
+  }
+
   let result;
   switch (action) {
     case 'meditate':      result = actionMeditate(state, character, options);     break;
     case 'trainBody':     result = actionTrainBody(state, character, options);    break;
     case 'trainSoul':     result = actionTrainSoul(state, character, options);    break;
     case 'exploreNode':   result = await actionExploreNode(state, character, options, env); break;
+    case 'fieldAction':   result = await actionFieldAction(state, character, options, env); break;
     case 'moveToTile':    result = actionMoveToTile(state, character, options);    break;
     case 'cityAction':    result = actionCityAction(state, character, options);   break;
     case 'battleAction':  result = actionBattle(state, character, options);       break;
@@ -274,6 +306,9 @@ export async function handleGameAction(request, env, account) {
     const travelMs = TRAVEL_TIMES[tType] ?? 45000;
     await setCooldown(env, character.id, 'travel', travelMs);
     travelCooldown = travelMs;
+  }
+  if (action === 'fieldAction' && result.cooldownKey && result.cooldownMs) {
+    await setCooldown(env, character.id, result.cooldownKey, result.cooldownMs);
   }
 
   // Return updated cooldowns so client can update immediately
@@ -455,6 +490,119 @@ async function actionExploreNode(state, character, options, env) {
     log,
     drops
   };
+}
+
+async function actionFieldAction(state, character, options, env) {
+  const { mode, regionId, x, y, terrainType = '.', hazard = 0, spiritDensity = 0 } = options ?? {};
+  if (!mode || !FIELD_ACTION_LABELS[mode]) return { error: 'Unknown field action mode.' };
+
+  const currentRegion = state.regionId ?? 'ashen-frontier';
+  const currentX = state.tileX ?? 9;
+  const currentY = state.tileY ?? 6;
+  if ((regionId ?? currentRegion) !== currentRegion || x !== currentX || y !== currentY) {
+    return { error: 'You must stand on a tile to work it.' };
+  }
+
+  const terrainMap = {
+    herbs: ['H', 'F', 'W', 'V', '.'],
+    ores: ['K', 'X', 'W'],
+    mobs: ['B', 'W', 'F', 'X'],
+    relic: ['X', 'K', 'V', '.'],
+    spirit: ['V', 'H', 'C', '.']
+  };
+  if (!terrainMap[mode].includes(terrainType)) {
+    return { error: `This tile is not suited for ${FIELD_ACTION_LABELS[mode].toLowerCase()}.` };
+  }
+
+  const realmGate = Math.max(0, Math.min(4, Number(hazard || 0) - 2));
+  if ((character.realm_index ?? 0) < realmGate) {
+    return { error: `This tile pressure is too intense. Reach realm ${realmGate} before working it directly.` };
+  }
+
+  const lootTable = getFieldLootTable(mode, terrainType, Number(hazard || 0), Number(spiritDensity || 0));
+  const log = [`You ${FIELD_ACTION_LABELS[mode].toLowerCase()} the tile at ${currentX},${currentY}.`];
+  const drops = [];
+
+  for (const entry of lootTable) {
+    if (Math.random() < entry.chance) {
+      const qty = entry.qty[0] + Math.floor(Math.random() * (entry.qty[1] - entry.qty[0] + 1));
+      drops.push({ id: entry.id, qty });
+      await grantItem(env, character.id, entry.id, qty);
+      log.push(`Recovered ${qty}x ${entry.id}.`);
+    }
+  }
+
+  if (!drops.length) log.push('The run comes up light this cycle.');
+
+  const silverGain = mode === 'mobs'
+    ? 4 + Math.floor(Math.random() * (6 + Number(hazard || 0)))
+    : 2 + Math.floor(Math.random() * (4 + Number(spiritDensity || 0)));
+
+  const newState = {
+    ...state,
+    silver: (state.silver ?? 0) + silverGain,
+    cultivationXp: (state.cultivationXp ?? 0) + (mode === 'spirit' ? 3 + Number(spiritDensity || 0) : mode === 'herbs' ? 2 : 0),
+    bodyXp: (state.bodyXp ?? 0) + (mode === 'ores' ? 2 + Number(hazard || 0) : mode === 'mobs' ? 1 + Number(hazard || 0) : 0),
+    battleQi: Math.min(state.battleQiMax ?? state.battleQi ?? 0, (state.battleQi ?? 0) + (mode === 'mobs' ? 4 : 1))
+  };
+
+  const worldEventHistory = Array.isArray(state.worldEventHistory) ? [...state.worldEventHistory] : [];
+  worldEventHistory.push(`${FIELD_ACTION_LABELS[mode]} run at ${currentX},${currentY}: ${drops.length ? drops.map(drop => `${drop.qty}x ${drop.id}`).join(', ') : 'no material haul'}.`);
+  newState.worldEventHistory = worldEventHistory.slice(-12);
+
+  log.push(`+${silverGain} silver.`);
+
+  const cooldownKey = `field:${mode}:${currentRegion}:${currentX}:${currentY}`;
+  const cooldownMs = FIELD_ACTION_BASE_MS[mode] + Number(hazard || 0) * 60000;
+  return { state: newState, log, drops, cooldownKey, cooldownMs };
+}
+
+function getFieldLootTable(mode, terrainType, hazard, spiritDensity) {
+  switch (mode) {
+    case 'herbs':
+      return [
+        { id: 'qi-grass', qty: [1, 2 + Math.min(2, spiritDensity)], chance: 0.88 },
+        { id: 'dustbloom', qty: [1, 2], chance: 0.45 },
+        { id: 'charbloom', qty: [1, 2], chance: terrainType === 'H' || hazard >= 1 ? 0.35 : 0.12 },
+        { id: spiritDensity >= 2 ? 'jade-root' : 'cinder-root', qty: [1, 1], chance: 0.22 + Math.min(0.18, spiritDensity * 0.04) },
+        { id: 'misty-cap', qty: [1, 1], chance: terrainType === 'F' || terrainType === 'W' ? 0.18 : 0.08 },
+        { id: 'heaven-grass', qty: [1, 1], chance: spiritDensity >= 4 ? 0.07 : 0.01 }
+      ];
+    case 'ores':
+      return [
+        { id: 'cracked-spirit-stone', qty: [1, 3 + Math.min(2, hazard)], chance: 0.86 },
+        { id: 'refined-iron-plate', qty: [1, 2], chance: terrainType === 'K' ? 0.42 : 0.18 },
+        { id: 'broken-rune-shard', qty: [1, 1], chance: terrainType === 'X' ? 0.3 : 0.16 },
+        { id: 'mid-spirit-stone', qty: [1, 1], chance: hazard >= 2 ? 0.08 : 0.03 }
+      ];
+    case 'mobs':
+      return [
+        { id: 'dustrat-fur', qty: [1, 2], chance: 0.78 },
+        { id: 'beast-blood-vial', qty: [1, 1], chance: 0.46 },
+        { id: terrainType === 'B' || hazard >= 2 ? 'fire-lizard-scale' : 'marshclaw-hide', qty: [1, 2], chance: 0.28 },
+        { id: terrainType === 'B' || hazard >= 3 ? 'croc-tooth' : 'marshclaw-hide', qty: [1, 1], chance: 0.16 },
+        { id: 'flame-core', qty: [1, 1], chance: hazard >= 3 ? 0.05 : 0.01 },
+        { id: 'blazing-blood', qty: [1, 1], chance: hazard >= 4 ? 0.03 : 0.0 }
+      ];
+    case 'relic':
+      return [
+        { id: 'low-spirit-stone', qty: [1, 2 + Math.min(2, hazard)], chance: 0.9 },
+        { id: 'cracked-spirit-stone', qty: [1, 2], chance: 0.52 },
+        { id: 'rusted-talisman', qty: [1, 1], chance: 0.16 },
+        { id: 'broken-rune-shard', qty: [1, 1], chance: 0.24 },
+        { id: 'ancient-blueprint', qty: [1, 1], chance: hazard >= 2 ? 0.05 : 0.02 },
+        { id: 'golem-core', qty: [1, 1], chance: hazard >= 4 ? 0.015 : 0.0 }
+      ];
+    case 'spirit':
+      return [
+        { id: 'low-spirit-stone', qty: [1, 1 + Math.min(2, spiritDensity)], chance: 0.82 },
+        { id: 'cracked-spirit-stone', qty: [1, 2], chance: 0.38 },
+        { id: 'mid-spirit-stone', qty: [1, 1], chance: spiritDensity >= 3 ? 0.12 : 0.04 },
+        { id: 'heaven-grass', qty: [1, 1], chance: spiritDensity >= 4 ? 0.06 : 0.0 }
+      ];
+    default:
+      return [];
+  }
 }
 
 function actionCityAction(state, character, options) {
