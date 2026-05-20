@@ -1942,7 +1942,7 @@ button.btn-locked {
   align-items:start;
 }
 .world-shell.focus-local {
-  grid-template-columns:1fr;
+  grid-template-columns:minmax(0, 1fr) minmax(320px, 390px);
 }
 .world-shell.focus-local .world-map-column {
   display:flex;
