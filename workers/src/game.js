@@ -174,9 +174,17 @@ export async function handleGameState(request, env, account) {
   env.DB.prepare('UPDATE characters SET last_active = ?1 WHERE id = ?2')
     .bind(Date.now(), character.id).run().catch(() => {});
 
+  const visiblePlayers = await getVisiblePlayersForTile(
+    env,
+    character.id,
+    state.regionId ?? 'ashen-frontier',
+    state.tileX ?? 9,
+    state.tileY ?? 6
+  );
+
   return json({
     ok: true,
-    state,
+    state: { ...state, visiblePlayers },
     cooldowns,
     travelCooldown,
     activeAction,
@@ -190,6 +198,36 @@ export async function handleGameState(request, env, account) {
       stage_index: character.stage_index
     }
   }, 200, request);
+}
+
+async function getVisiblePlayersForTile(env, characterId, regionId, tileX, tileY) {
+  const activeAfter = Date.now() - (5 * 60 * 1000);
+  const { results } = await env.DB.prepare(
+    `SELECT c.id, c.name, c.realm_index, c.stage_index,
+            json_extract(cs.state_json, '$.regionId') AS regionId,
+            CAST(json_extract(cs.state_json, '$.tileX') AS INTEGER) AS tileX,
+            CAST(json_extract(cs.state_json, '$.tileY') AS INTEGER) AS tileY
+     FROM characters c
+     JOIN character_state cs ON cs.character_id = c.id
+     WHERE c.is_deleted = 0
+       AND c.id <> ?1
+       AND c.last_active >= ?2
+       AND json_extract(cs.state_json, '$.regionId') = ?3
+       AND ABS(CAST(json_extract(cs.state_json, '$.tileX') AS INTEGER) - ?4) <= 2
+       AND ABS(CAST(json_extract(cs.state_json, '$.tileY') AS INTEGER) - ?5) <= 2
+     ORDER BY c.last_active DESC
+     LIMIT 12`
+  ).bind(characterId, activeAfter, regionId, tileX, tileY).all();
+
+  return (results || []).map(player => ({
+    id: player.id,
+    name: player.name,
+    realm_index: player.realm_index,
+    stage_index: player.stage_index,
+    regionId: player.regionId,
+    tileX: Number(player.tileX),
+    tileY: Number(player.tileY)
+  }));
 }
 
 // ── Game actions ──────────────────────────────────────────────
@@ -243,7 +281,14 @@ export async function handleGameAction(request, env, account) {
       }
     }
     const name = { meditate: 'Meditation', trainBody: 'Body training', trainSoul: 'Soul training' }[cancelled[0]] ?? 'Training';
-    return json({ ok: true, result: [`${name} cancelled. Training was interrupted.`], state }, 200, request);
+    const visiblePlayers = await getVisiblePlayersForTile(
+      env,
+      character.id,
+      state.regionId ?? 'ashen-frontier',
+      state.tileX ?? 9,
+      state.tileY ?? 6
+    );
+    return json({ ok: true, result: [`${name} cancelled. Training was interrupted.`], state: { ...state, visiblePlayers } }, 200, request);
   }
 
   // Travel cooldown gate for moveToTile
@@ -324,7 +369,15 @@ export async function handleGameAction(request, env, account) {
     if (cooldowns[a] > 0) { activeAction = { type: a, remaining: cooldowns[a] }; break; }
   }
 
-  return json({ ok: true, result: result.log, state: result.state, cooldowns, travelCooldown, activeAction }, 200, request);
+  const visiblePlayers = await getVisiblePlayersForTile(
+    env,
+    character.id,
+    result.state.regionId ?? 'ashen-frontier',
+    result.state.tileX ?? 9,
+    result.state.tileY ?? 6
+  );
+
+  return json({ ok: true, result: result.log, state: { ...result.state, visiblePlayers }, cooldowns, travelCooldown, activeAction }, 200, request);
 }
 
 // ── Zone routes ───────────────────────────────────────────────

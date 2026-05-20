@@ -2025,6 +2025,29 @@ button.btn-locked {
   user-select: none;
   position: relative;
   transition: transform .12s ease, border-color .12s ease, box-shadow .16s ease, filter .16s ease;
+  overflow: visible;
+}
+.tile-nameplate,
+.local-tile-nameplate {
+  position:absolute;
+  left:50%;
+  bottom:calc(100% + 2px);
+  transform:translateX(-50%);
+  padding:.08rem .3rem;
+  border-radius:999px;
+  background:rgba(6,8,11,.94);
+  border:1px solid rgba(201,162,50,.26);
+  color:var(--paper);
+  font-size:.56rem;
+  line-height:1.1;
+  white-space:nowrap;
+  pointer-events:none;
+  z-index:3;
+}
+.tile-glyph,
+.local-tile-glyph {
+  position:relative;
+  z-index:1;
 }
 .t-M   { background:#0c0c0c; color:#252525; cursor:not-allowed; border-color:#141414; }
 .t-dot { background:#09090b; color:#1c1b18; border-color:#101010; }
@@ -2046,6 +2069,7 @@ button.btn-locked {
 .t-adj:hover { background-color:rgba(201,162,50,.08); border-color:rgba(201,162,50,.7); }
 .t-adj-vis { border-color:rgba(201,162,50,.15); }
 .t-selected { border-color:rgba(232,223,192,.58); box-shadow:inset 0 0 0 1px rgba(232,223,192,.2), 0 0 0 1px rgba(201,162,50,.18); transform:translateY(-1px); }
+.t-other-player { border-color:rgba(76,170,126,.48); box-shadow:0 0 0 1px rgba(76,170,126,.16); }
 .t-travel-origin { box-shadow: inset 0 0 0 1px rgba(232,223,192,.1); }
 .t-travel-target { border-color:rgba(58,125,96,.65); box-shadow:0 0 12px rgba(58,125,96,.18), inset 0 0 0 1px rgba(58,125,96,.18); }
 
@@ -2321,6 +2345,36 @@ button.btn-locked {
   grid-template-columns:repeat(2, minmax(0, 1fr));
   gap:1rem;
 }
+.world-command-card {
+  margin-top:1rem;
+}
+.world-command-head {
+  margin-bottom:.7rem;
+}
+.world-tab-nav {
+  display:flex;
+  flex-wrap:wrap;
+  gap:.45rem;
+}
+.world-tab-btn.is-active {
+  background:linear-gradient(180deg, rgba(158,32,32,.92), rgba(110,16,16,.96));
+  border-color:rgba(201,162,50,.28);
+  color:var(--paper);
+}
+.world-tab-panel {
+  display:none;
+}
+.world-tab-panel.is-active {
+  display:block;
+}
+.world-command-meta {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:.8rem;
+  flex-wrap:wrap;
+  margin-bottom:.8rem;
+}
 .world-support-card {
   min-height:100%;
 }
@@ -2375,6 +2429,43 @@ button.btn-locked {
   font-size:.78rem;
   line-height:1.45;
   color:var(--ink-2);
+}
+.local-inspector-card.compact {
+  min-height:unset;
+  padding:.75rem .8rem;
+}
+.world-inline-meta {
+  display:flex;
+  flex-wrap:wrap;
+  gap:.4rem;
+  margin:.5rem 0 .65rem;
+}
+.world-site-detail-head.compact {
+  margin-bottom:.25rem;
+}
+.world-party-summary {
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(120px, 1fr));
+  gap:.55rem;
+  margin-bottom:.8rem;
+}
+.world-party-chip {
+  border:1px solid rgba(201,162,50,.14);
+  border-radius:8px;
+  padding:.65rem .75rem;
+  background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(0,0,0,.12));
+}
+.world-party-chip-label {
+  display:block;
+  font-size:.68rem;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--ink-2);
+  margin-bottom:.2rem;
+}
+.world-party-chip strong {
+  color:var(--ink-0);
+  font-size:.95rem;
 }
 .world-local-node {
   min-height:100px;
@@ -2437,11 +2528,14 @@ button.btn-locked {
   display:flex;
   align-items:center;
   justify-content:center;
+  flex-direction:column;
   border:1px solid rgba(201,162,50,.14);
   background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(0,0,0,.18));
   color:var(--ink-1);
   font-size:1rem;
   transition:border-color .12s ease, transform .12s ease, box-shadow .12s ease, background-color .12s ease;
+  position:relative;
+  overflow:visible;
 }
 .local-tile.is-adjacent {
   border-color:rgba(201,162,50,.36);
@@ -2458,6 +2552,13 @@ button.btn-locked {
 }
 .local-tile.has-resource {
   color:#d9bf6e;
+}
+.local-tile.has-visitor {
+  border-color:rgba(76,170,126,.48);
+  box-shadow:0 0 0 1px rgba(76,170,126,.16);
+}
+.local-tile.has-npc {
+  border-color:rgba(201,162,50,.34);
 }
 .local-tile.has-mob {
   color:#df7267;
@@ -2478,6 +2579,9 @@ button.btn-locked {
 .local-tile.terrain-a,
 .local-tile.terrain-s {
   background:linear-gradient(180deg, rgba(58,125,96,.12), rgba(0,0,0,.18));
+}
+.local-tile-nameplate {
+  font-size:.54rem;
 }
 .local-mini-tile.is-player {
   border-color:rgba(58,125,96,.6);

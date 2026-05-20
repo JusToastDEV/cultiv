@@ -68,6 +68,7 @@ let _localPlayerY = null;
 let _localMapData = null;        // {width, height, tiles: [{x, y, terrain, resources, mobs, ...}]}
 let _localMapSeed = null;        // Deterministic seed for consistent map generation
 let _localEntryDir = null;       // Entry direction for spawn positioning
+let _worldSupportTab = 'local';
 
 // Realm names for display
 const REALM_NAMES = [
@@ -1333,6 +1334,20 @@ function updateWorldViewToggle() {
   if (btn) btn.textContent = _viewMode === 'local' ? 'Back to World Map' : 'Explore Local Tile';
 }
 
+function updateWorldSupportTabs() {
+  document.querySelectorAll('[data-world-tab]').forEach(btn => {
+    btn.classList.toggle('is-active', btn.dataset.worldTab === _worldSupportTab);
+  });
+  document.querySelectorAll('[data-world-tab-panel]').forEach(panel => {
+    panel.classList.toggle('is-active', panel.dataset.worldTabPanel === _worldSupportTab);
+  });
+}
+
+function setWorldSupportTab(tab) {
+  _worldSupportTab = tab;
+  updateWorldSupportTabs();
+}
+
 function toggleWorldView() {
   if (_viewMode === 'local') {
     // Exit local view back to world
@@ -1350,6 +1365,7 @@ function toggleWorldView() {
       return;
     }
   }
+  setWorldSupportTab('local');
   updateWorldViewToggle();
   renderTileMap();
   renderAll();
@@ -1416,7 +1432,7 @@ function generateLocalMap(tile, x, y, entryDir) {
           // City: central plaza, roads, buildings
           if (tx === mid && ty === mid) terrain = 'P'; // Plaza
           else if (tx === mid || ty === mid) terrain = 'R'; // Road
-          else terrain = 'B'; // Building
+          else terrain = 'C'; // Building block / civic lane
           terrain_kind = 'civic';
         } else if (tile.t === 'H') {
           terrain = 'H'; // Herb garden
@@ -1492,8 +1508,47 @@ function generateLocalMap(tile, x, y, entryDir) {
       }
     }
   }
-  
-  return { width: size, height: size, tiles };
+
+  const mapData = { width: size, height: size, tiles };
+  if (tile.t === 'C') {
+    decorateLocalCityMap(tile, mapData);
+  }
+  return mapData;
+}
+
+function getLocalMapTile(mapData, x, y) {
+  if (!mapData) return null;
+  if (x < 0 || y < 0 || x >= mapData.width || y >= mapData.height) return null;
+  return mapData.tiles[y * mapData.width + x] || null;
+}
+
+function applyLocalMapFeature(mapData, x, y, feature) {
+  const subtile = getLocalMapTile(mapData, x, y);
+  if (!subtile) return;
+  Object.assign(subtile, feature);
+  if (feature.resources) subtile.resources = [...new Set([...(subtile.resources || []), ...feature.resources])];
+  if (feature.mobs) subtile.mobs = [...new Set([...(subtile.mobs || []), ...feature.mobs])];
+  if (feature.hazards) subtile.hazards = [...new Set([...(subtile.hazards || []), ...feature.hazards])];
+}
+
+function decorateLocalCityMap(tile, mapData) {
+  if (tile.cityId !== 'ashgate') return;
+
+  const mid = Math.floor(mapData.width / 2);
+  const features = [
+    { x: mid, y: mid, terrain: 'P', terrain_kind: 'central plaza', label: 'Ashgate Plaza', district: 'Central Plaza', npcName: 'Marshal Sen', service: 'plaza' },
+    { x: mid - 2, y: mid, terrain: 'C', terrain_kind: 'guild hall', label: 'Iron Guild Hall', district: 'Guild Ward', npcName: 'Registrar Kesh', service: 'guild', questHook: 'Register with Iron Guild' },
+    { x: mid + 2, y: mid, terrain: 'C', terrain_kind: 'sect court', label: 'Ashen Frontier Sect Court', district: 'Sect Court', npcName: 'Outer Disciple Ren', service: 'sect', questHook: 'Petition Ashen Frontier Sect' },
+    { x: mid - 3, y: mid + 2, terrain: 'C', terrain_kind: 'vault hall', label: 'Silver Vault', district: 'Ledger Ward', npcName: 'Vault Clerk Mina', service: 'bank' },
+    { x: mid + 3, y: mid - 2, terrain: 'C', terrain_kind: 'archive hall', label: 'Technique Archive', district: 'Scriptorium', npcName: 'Archivist Pei', service: 'techniques' },
+    { x: mid + 1, y: mid + 3, terrain: 'C', terrain_kind: 'patron hall', label: 'Patron Hall', district: 'Broker Court', npcName: 'Broker Nuo', service: 'patron' },
+    { x: mid - 3, y: mid - 1, terrain: 'C', terrain_kind: 'forge lane', label: 'Blacksmith Lane', district: 'Forge Row', npcName: 'Smith Haro', service: 'blacksmith', questHook: 'Stolen Weapon Recovered' },
+    { x: mid, y: mid - 3, terrain: 'R', terrain_kind: 'duel ring', label: 'Street Duel Ring', district: 'Plaza Ring', npcName: 'Showoff Jian', service: 'duel', questHook: 'Street Duel Challenge', mobs: ['plaza-showoff'] },
+    { x: mid + 3, y: mid - 4, terrain: 'R', terrain_kind: 'scout post', label: 'Fangkou Scout Post', district: 'East Gate Lane', npcName: 'Scout Ilya', service: 'rumor', questHook: 'Forgotten Fangkou Grove' }
+  ];
+
+  features.forEach(feature => applyLocalMapFeature(mapData, feature.x, feature.y, feature));
+  mapData.cityRoster = features.map(({ npcName, label, service, district, questHook }) => ({ npcName, label, service, district, questHook }));
 }
 
 function getLocalMapSpawnPos(entryDir, mapWidth, mapHeight) {
@@ -1545,147 +1600,190 @@ function exitLocalTileView() {
 }
 
 function moveLocalPlayer(tx, ty) {
-  // Move player to specific position in local map
   if (!_localMapData) return false;
-  
-  // Bounds check
   if (tx < 0 || tx >= _localMapData.width || ty < 0 || ty >= _localMapData.height) return false;
-  
-  // Check if terrain is traversable (skip borders)
+  if (_localPlayerX !== null && _localPlayerY !== null) {
+    const distance = Math.abs(tx - _localPlayerX) + Math.abs(ty - _localPlayerY);
+    if (distance > 1) return false;
+  }
+
+  if (tx < 0 || tx >= _localMapData.width || ty < 0 || ty >= _localMapData.height) return false;
   const tile = _localMapData.tiles[ty * _localMapData.width + tx];
-    if (!tile || tile.terrain === '#' || tile.terrain === 'B') return false;
+  if (!tile || tile.terrain === '#') return false;
   
   _localPlayerX = tx;
   _localPlayerY = ty;
   return true;
 }
 
-  function getLocalPlayerTile() {
-    if (!_localMapData || _localPlayerX === null || _localPlayerY === null) return null;
-    return _localMapData.tiles[_localPlayerY * _localMapData.width + _localPlayerX] || null;
+function getLocalPlayerTile() {
+  if (!_localMapData || _localPlayerX === null || _localPlayerY === null) return null;
+  return _localMapData.tiles[_localPlayerY * _localMapData.width + _localPlayerX] || null;
+}
+
+function getVisiblePlayers() {
+  return Array.isArray(_gameState?.visiblePlayers) ? _gameState.visiblePlayers : [];
+}
+
+function getLocalActionForSubtile(worldTile, subtile) {
+  if (!subtile) return null;
+  if (subtile.mobs?.length) return 'mobs';
+  if (subtile.resources?.length) {
+    if (worldTile.herbs?.length) return 'herbs';
+    if (worldTile.ores?.length) return 'ores';
+    if (worldTile.drops?.length || worldTile.t === 'X') return 'relic';
   }
+  if (worldTile.spiritDensity && (subtile.terrain === 'Q' || subtile.terrain === 'M')) return 'spirit';
+  return null;
+}
 
-  function getLocalActionForSubtile(worldTile, subtile) {
-    if (!subtile) return null;
-    if (subtile.mobs?.length) return 'mobs';
-    if (subtile.resources?.length) {
-      if (worldTile.herbs?.length) return 'herbs';
-      if (worldTile.ores?.length) return 'ores';
-      if (worldTile.drops?.length || worldTile.t === 'X') return 'relic';
-    }
-    if (worldTile.spiritDensity && (subtile.terrain === 'Q' || subtile.terrain === 'M')) return 'spirit';
-    return null;
+function getAshgateQuestEntries() {
+  return [
+    { title: 'Register with Iron Guild', badgeLabel: 'guild', rarity: 'common', meta: 'Gain faction access, a stipend, and guild contracts.' },
+    { title: 'Petition Ashen Frontier Sect', badgeLabel: 'sect', rarity: 'common', meta: 'Seek outer court affiliation and sect-backed work.' },
+    { title: 'Forgotten Fangkou Grove', badgeLabel: 'common', rarity: 'common', meta: 'You discover an untouched grove radiating with spirit essence.' },
+    { title: 'Street Duel Challenge', badgeLabel: 'uncommon', rarity: 'uncommon', meta: 'A plaza showoff is baiting passersby into public duels.', sense: 'Soul Sense: Their meridians flicker unevenly. The bravado is real, but the circulation underneath it is unstable and easy to bait.' },
+    { title: 'Stolen Weapon Recovered', badgeLabel: 'common', rarity: 'common', meta: 'You track down a thief who robbed a blacksmith.' }
+  ];
+}
+
+function getAshgateRoster() {
+  return [
+    { title: 'Registrar Kesh', badgeLabel: 'guild', rarity: 'common', meta: 'Iron Guild clerk handling contracts, stipends, and starter registration.' },
+    { title: 'Outer Disciple Ren', badgeLabel: 'sect', rarity: 'common', meta: 'Ashen Frontier Sect representative screening recruits and errands.' },
+    { title: 'Broker Nuo', badgeLabel: 'patron', rarity: 'common', meta: 'Patron Hall broker tracking requests, rumors, and quiet commissions.' },
+    { title: 'Showoff Jian', badgeLabel: 'duel', rarity: 'uncommon', meta: 'Arena loudmouth drawing challengers into public tests of nerve.' }
+  ];
+}
+
+function handleLocalCityAction(actionKey, x, y) {
+  const tile = getRegionTile(getRenderedRegionId(_gameState), x, y);
+  const messages = {
+    guild: 'Registrar Kesh slides a contract slate across the counter. The Iron Guild is ready to register you for paid city work.',
+    sect: 'Outer Disciple Ren evaluates your realm, posture, and nerve before offering sect-backed work from the Ashen Frontier court.',
+    blacksmith: 'Smith Haro is still furious about the stolen weapon. He points you toward the alleys where the thief was last seen.',
+    rumor: 'Scout Ilya sketches a hidden path toward the Fangkou Grove and warns you the spirit scent there is growing too strong to ignore.',
+    duel: 'Showoff Jian calls you out in the ring and invites a public duel. The crowd expects either a humiliation or a revelation.',
+    plaza: 'Marshal Sen keeps Ashgate moving. Patrols, traders, and wandering cultivators all filter through the central plaza.'
+  };
+  const message = messages[actionKey] || 'The district is active, but this interaction still needs a deeper gameplay pass.';
+  appendToLog(message);
+  showToast(titleizeSlug(actionKey), 'ok');
+  showTileInfo(tile, x, y, { statusMessage: message });
+  if (actionKey === 'guild' || actionKey === 'sect' || actionKey === 'duel' || actionKey === 'blacksmith' || actionKey === 'rumor') {
+    setWorldSupportTab('quests');
   }
+}
 
-  function renderLocalInspector(tile, x, y) {
-    const grid = document.getElementById('world-local-grid');
-    const detail = document.getElementById('world-local-site-detail');
-    const summary = document.getElementById('world-site-summary');
-    if (!grid || !detail) return;
+function renderLocalInspector(tile, x, y) {
+  const grid = document.getElementById('world-local-grid');
+  const detail = document.getElementById('world-local-site-detail');
+  const summary = document.getElementById('world-site-summary');
+  if (!grid || !detail) return;
 
-    const area = getTileAreaProfile(tile);
-    const isLocalActive = _viewMode === 'local'
-      && _localMapData
-      && _localViewTile
-      && _localViewTile.x === x
-      && _localViewTile.y === y;
-    const isPlayerTile = x === (_gameState?.tileX ?? 9) && y === (_gameState?.tileY ?? 6);
-    const canExplore = isPlayerTile && _travelReadyAt <= Date.now();
+  const area = getTileAreaProfile(tile);
+  const isLocalActive = _viewMode === 'local'
+    && _localMapData
+    && _localViewTile
+    && _localViewTile.x === x
+    && _localViewTile.y === y;
+  const isPlayerTile = x === (_gameState?.tileX ?? 9) && y === (_gameState?.tileY ?? 6);
+  const canExplore = isPlayerTile && _travelReadyAt <= Date.now();
 
-    grid.classList.add('is-inspector');
+  grid.classList.add('is-inspector');
 
-    if (isLocalActive) {
-      const subtile = getLocalPlayerTile();
-      const action = getLocalActionForSubtile(tile, subtile);
-      const resourceText = subtile?.resources?.length
-        ? subtile.resources.map(titleizeSlug).join(', ')
-        : 'No marked materials on this step.';
-      const mobText = subtile?.mobs?.length
-        ? subtile.mobs.map(titleizeSlug).join(', ')
-        : 'No hostiles marked on this step.';
-      const hazardText = subtile?.hazards?.length
-        ? `Hazard pressure ${tile.hazard ?? 1}.`
-        : 'Stable footing.';
+  if (isLocalActive) {
+    const subtile = getLocalPlayerTile();
+    const action = getLocalActionForSubtile(tile, subtile);
+    const visitors = getVisiblePlayers().filter(player => player.regionId === (_localViewTile?.regionId ?? '') && player.tileX === x && player.tileY === y);
+    const actionButtons = [
+      '<button type="button" class="btn-sm btn-primary" onclick="toggleWorldView()">Back to World Map</button>'
+    ];
 
-      if (summary) summary.textContent = `${area.name} · Local field ${_localMapData.width}x${_localMapData.height}`;
-      grid.innerHTML = `
-        <div class="local-inspector-card">
-          <div class="local-inspector-label">Position</div>
-          <div class="local-inspector-value">${_localPlayerX}, ${_localPlayerY}</div>
-          <div class="local-inspector-copy">Step-by-step local traversal. Adjacent tiles only.</div>
-        </div>
-        <div class="local-inspector-card">
-          <div class="local-inspector-label">Ground</div>
-          <div class="local-inspector-value">${escHtml(titleizeSlug(subtile?.terrain_kind || 'unknown'))}</div>
-          <div class="local-inspector-copy">${escHtml(hazardText)}</div>
-        </div>
-        <div class="local-inspector-card">
-          <div class="local-inspector-label">Resources</div>
-          <div class="local-inspector-value">${escHtml(resourceText)}</div>
-          <div class="local-inspector-copy">Local node reads update as you move.</div>
-        </div>
-        <div class="local-inspector-card">
-          <div class="local-inspector-label">Pressure</div>
-          <div class="local-inspector-value">${escHtml(mobText)}</div>
-          <div class="local-inspector-copy">Use world view when you need the larger route again.</div>
-        </div>
-      `;
-
-      detail.innerHTML = `
-        <div class="world-site-detail-head">
-          <div>
-            <div class="tile-detail-kicker">Local Field Active</div>
-            <h4 class="world-site-detail-title">${escHtml(area.name)} · ${escHtml(titleizeSlug(subtile?.terrain_kind || 'ground'))}</h4>
-          </div>
-          <span class="world-site-detail-glyph">⊕</span>
-        </div>
-        <p class="tile-section-copy">Navigate the detailed terrain directly in the main map. Resources, mobs, and hazard pockets are distributed across this full local field instead of a 3x3 menu.</p>
-        <div class="world-site-actions">
-          <button type="button" class="btn-sm btn-primary" onclick="toggleWorldView()">Back to World Map</button>
-          ${action ? `<button type="button" class="btn-sm btn-ghost" onclick="performTileFieldAction('${action}', ${x}, ${y})">Work This Node</button>` : ''}
-        </div>
-      `;
-      return;
+    if (action) {
+      actionButtons.push(`<button type="button" class="btn-sm btn-ghost" onclick="performTileFieldAction('${action}', ${x}, ${y})">Work This Node</button>`);
+    }
+    if (subtile?.service === 'bank' || subtile?.service === 'techniques' || subtile?.service === 'patron') {
+      const label = subtile.service === 'bank' ? 'Open Silver Vault' : subtile.service === 'techniques' ? 'Open Archive' : 'Open Patron Hall';
+      actionButtons.push(`<button type="button" class="btn-sm btn-ghost" onclick="openWorldService('${subtile.service}', ${x}, ${y})">${label}</button>`);
+    } else if (subtile?.service) {
+      actionButtons.push(`<button type="button" class="btn-sm btn-ghost" onclick="handleLocalCityAction('${subtile.service}', ${x}, ${y})">${escHtml(titleizeSlug(subtile.service))}</button>`);
     }
 
-    if (summary) summary.textContent = `${area.name} · Tile field profile`;
+    if (summary) summary.textContent = `${area.name} · Local field ${_localMapData.width}x${_localMapData.height}`;
     grid.innerHTML = `
-      <div class="local-inspector-card">
-        <div class="local-inspector-label">Projected Size</div>
-        <div class="local-inspector-value">${getMapSizeForTile(tile)} x ${getMapSizeForTile(tile)}</div>
-        <div class="local-inspector-copy">Each world tile expands into its own explorable field.</div>
+      <div class="local-inspector-card compact">
+        <div class="local-inspector-label">District</div>
+        <div class="local-inspector-value">${escHtml(subtile?.district || titleizeSlug(subtile?.terrain_kind || 'ground'))}</div>
+        <div class="local-inspector-copy">${escHtml(subtile?.label || 'Unmarked section of the tile field.')}</div>
       </div>
-      <div class="local-inspector-card">
-        <div class="local-inspector-label">Resources</div>
-        <div class="local-inspector-value">${escHtml((tile.herbs || tile.ores || tile.drops || []).slice(0, 2).map(titleizeSlug).join(', ') || 'Scattered nodes')}</div>
-        <div class="local-inspector-copy">Resource nodes are spread through the local field instead of grouped in a fixed menu.</div>
+      <div class="local-inspector-card compact">
+        <div class="local-inspector-label">Occupant</div>
+        <div class="local-inspector-value">${escHtml(subtile?.npcName || (visitors[0]?.name ?? 'No named contact here'))}</div>
+        <div class="local-inspector-copy">${escHtml(visitors.length ? `${visitors.length} cultivator${visitors.length > 1 ? 's are' : ' is'} sharing this world tile.` : 'No other player signatures on this tile right now.')}</div>
       </div>
-      <div class="local-inspector-card">
-        <div class="local-inspector-label">Mob Pressure</div>
-        <div class="local-inspector-value">${escHtml(tile.mobs?.length ? tile.mobs.map(titleizeSlug).join(', ') : 'Low')}</div>
-        <div class="local-inspector-copy">Hostiles occupy their own cells and routes.</div>
-      </div>
-      <div class="local-inspector-card">
-        <div class="local-inspector-label">Traversal</div>
-        <div class="local-inspector-value">Direct Map View</div>
-        <div class="local-inspector-copy">Swap between world and local views from the same main map viewport.</div>
+      <div class="local-inspector-card compact">
+        <div class="local-inspector-label">Hook</div>
+        <div class="local-inspector-value">${escHtml(subtile?.questHook || (action ? `Field ${titleizeSlug(action)}` : 'Free movement'))}</div>
+        <div class="local-inspector-copy">${escHtml(subtile?.mobs?.length ? subtile.mobs.map(titleizeSlug).join(', ') : subtile?.resources?.length ? subtile.resources.map(titleizeSlug).join(', ') : 'Walk the district to reach another service point or rumor source.')}</div>
       </div>
     `;
 
     detail.innerHTML = `
-      <div class="world-site-detail-head">
+      <div class="world-site-detail-head compact">
         <div>
-          <div class="tile-detail-kicker">Local Field Preview</div>
-          <h4 class="world-site-detail-title">${escHtml(area.name)}</h4>
+          <div class="tile-detail-kicker">${escHtml(area.name)}</div>
+          <h4 class="world-site-detail-title">${escHtml(subtile?.label || titleizeSlug(subtile?.terrain_kind || 'Ground'))}</h4>
         </div>
-        <span class="world-site-detail-glyph">${escHtml(TILE_GLYPHS[tile.t] ?? '·')}</span>
+        <span class="world-site-detail-glyph">⊕</span>
       </div>
-      <p class="tile-section-copy">The local view for this tile is a full explorable field with variable scale, distributed nodes, and step-by-step movement across detailed subtiles.</p>
-      <div class="world-site-actions">
-        ${canExplore ? '<button type="button" class="btn-sm btn-primary" onclick="toggleWorldView()">Open Local Field</button>' : '<span class="world-empty-note">Stand on this tile and finish traveling to open its local field.</span>'}
+      <div class="world-inline-meta">
+        <span class="tag-city">${escHtml(`Pos ${_localPlayerX},${_localPlayerY}`)}</span>
+        ${subtile?.npcName ? `<span class="tag-city">${escHtml(subtile.npcName)}</span>` : ''}
+        ${subtile?.district ? `<span class="tag-city">${escHtml(subtile.district)}</span>` : ''}
       </div>
+      <div class="world-site-actions">${actionButtons.join('')}</div>
     `;
+    return;
   }
+
+  if (summary) summary.textContent = `${area.name} · Tile field profile`;
+  grid.innerHTML = `
+    <div class="local-inspector-card compact">
+      <div class="local-inspector-label">Field Size</div>
+      <div class="local-inspector-value">${getMapSizeForTile(tile)} x ${getMapSizeForTile(tile)}</div>
+      <div class="local-inspector-copy">The local map replaces the old fixed node grid with a walkable field.</div>
+    </div>
+    <div class="local-inspector-card compact">
+      <div class="local-inspector-label">Hooks</div>
+      <div class="local-inspector-value">${escHtml(tile.cityId === 'ashgate' ? 'Guild, sect, patron, archive, vault, duel ring' : 'Resources, mobs, and terrain routes')}</div>
+      <div class="local-inspector-copy">Enter local view to move directly through districts and points of interest.</div>
+    </div>
+    <div class="local-inspector-card compact">
+      <div class="local-inspector-label">Traffic</div>
+      <div class="local-inspector-value">${escHtml(getVisiblePlayers().length ? `${getVisiblePlayers().length} nearby cultivators` : 'Quiet right now')}</div>
+      <div class="local-inspector-copy">Player nameplates and local NPCs surface directly on the map.</div>
+    </div>
+  `;
+
+  detail.innerHTML = `
+    <div class="world-site-detail-head compact">
+      <div>
+        <div class="tile-detail-kicker">Local Field Preview</div>
+        <h4 class="world-site-detail-title">${escHtml(area.name)}</h4>
+      </div>
+      <span class="world-site-detail-glyph">${escHtml(TILE_GLYPHS[tile.t] ?? '·')}</span>
+    </div>
+    <div class="world-inline-meta">
+      ${tile.cityId ? `<span class="tag-city">${escHtml(titleizeSlug(tile.cityId))}</span>` : `<span class="tag-city">${escHtml(area.focusLabel)}</span>`}
+      ${tile.mobs?.length ? `<span class="tag-danger">${escHtml(tile.mobs.length)} threats</span>` : ''}
+      ${tile.herbs?.length || tile.ores?.length ? `<span class="tag-vein">Node field active</span>` : ''}
+    </div>
+    <div class="world-site-actions">
+      ${canExplore ? '<button type="button" class="btn-sm btn-primary" onclick="toggleWorldView()">Open Local Field</button>' : '<span class="world-empty-note">Stand on this tile and finish traveling to open its local field.</span>'}
+    </div>
+  `;
+}
 
 function makeLocalSite(tileKey, key, name, glyph, kind, desc, actionHint) {
   return { id: `${tileKey}:${key}`, key, name, glyph, kind, desc, actionHint };
@@ -2105,6 +2203,10 @@ function renderWorldQuestBoard(currentTile, selectedTile) {
   const selectedArea = getTileAreaProfile(selectedTile);
   const entries = [];
 
+   if ((selectedTile.cityId || currentTile.cityId) === 'ashgate') {
+    getAshgateQuestEntries().forEach(entry => entries.push(entry));
+  }
+
   quests.forEach((quest, index) => {
     if (typeof quest === 'string') {
       entries.push({ title: quest, badgeLabel: 'active', rarity: 'uncommon', meta: 'Tracked from the live quest log.' });
@@ -2118,19 +2220,12 @@ function renderWorldQuestBoard(currentTile, selectedTile) {
     });
   });
 
-  entries.push({
-    title: `Survey ${selectedArea.name}`,
-    badgeLabel: 'field',
-    rarity: 'common',
-    meta: `Walk the local site grid, read the tile hooks, and stage the next live exploration pass for this ${selectedArea.focusLabel.toLowerCase()} tile.`
-  });
-
-  if (selectedTile.cityId) {
+  if (!entries.length || !((selectedTile.cityId || currentTile.cityId) === 'ashgate')) {
     entries.push({
-      title: `Handle ${titleizeSlug(selectedTile.cityId)} traffic`,
-      badgeLabel: 'city',
+      title: `Survey ${selectedArea.name}`,
+      badgeLabel: 'field',
       rarity: 'common',
-      meta: 'Banking, archives, tavern rumors, and civic hooks now route through World instead of a separate city tab.'
+      meta: `Walk the local field, inspect resource lanes, and stage the next move through this ${selectedArea.focusLabel.toLowerCase()} tile.`
     });
   }
   if (selectedTile.mobs?.length) {
@@ -2169,6 +2264,7 @@ function renderWorldQuestBoard(currentTile, selectedTile) {
           <span class="quest-badge ${escHtml(entry.rarity || 'common')}">${escHtml(entry.badgeLabel)}</span>
         </div>
         <div class="quest-line-meta">${escHtml(entry.meta)}</div>
+        ${entry.sense ? `<div class="quest-line-sense">${escHtml(entry.sense)}</div>` : ''}
       </div>
     </li>
   `).join('');
@@ -2176,39 +2272,35 @@ function renderWorldQuestBoard(currentTile, selectedTile) {
 
 function renderWorldPresenceFeed(currentTile, selectedTile) {
   const list = document.getElementById('world-presence-list');
-  const compact = document.getElementById('event-log-compact');
-  const route = getActiveTravelRoute();
+  const summary = document.getElementById('world-party-summary');
   const items = [];
 
-  if (route) {
-    const fromTile = getRegionTile(route.regionId, route.fromX, route.fromY);
-    const toTile = getRegionTile(route.regionId, route.toX, route.toY);
-    items.push({
-      title: 'Transit corridor active',
-      badgeLabel: 'travel',
-      rarity: 'uncommon',
-      meta: `Moving from ${fromTile.name || TILE_TERRAIN_NAMES[fromTile.t]} to ${toTile.name || TILE_TERRAIN_NAMES[toTile.t]}. This is where companion chatter, player pass-bys, and NPC interceptions should later resolve.`
-    });
-  }
-
   const companions = Array.isArray(_gameState?.companions) ? _gameState.companions : [];
+  const visiblePlayers = getVisiblePlayers();
+  const cityId = selectedTile.cityId || currentTile.cityId;
+  const cityRoster = cityId === 'ashgate' ? getAshgateRoster() : [];
+
+  if (summary) {
+    summary.innerHTML = `
+      <div class="world-party-chip"><span class="world-party-chip-label">Party</span><strong>${companions.length ? companions.length : 'Solo'}</strong></div>
+      <div class="world-party-chip"><span class="world-party-chip-label">Players</span><strong>${visiblePlayers.length}</strong></div>
+      <div class="world-party-chip"><span class="world-party-chip-label">NPCs</span><strong>${cityRoster.length}</strong></div>
+    `;
+  }
+
   if (companions.length) {
-    items.push({ title: 'Companion escort', badgeLabel: `${companions.length}`, rarity: 'common', meta: 'Companion travel reactions will surface here once party movement is live.' });
+    items.push({ title: 'Companion party assigned', badgeLabel: 'party', rarity: 'common', meta: `${companions.length} companion${companions.length > 1 ? 's are' : ' is'} keyed to your travel lane.` });
   } else {
-    items.push({ title: 'No escort assigned', badgeLabel: 'party', rarity: 'common', meta: 'Companions are not yet traveling with you. This card is where they will show up once party movement lands.' });
+    items.push({ title: 'No companion party assigned', badgeLabel: 'solo', rarity: 'common', meta: 'Party UI is ready for companions, but you are moving solo right now.' });
   }
 
-  const rivals = Array.isArray(_gameState?.rivalNpcs) ? _gameState.rivalNpcs : [];
-  if (rivals.length) {
-    items.push({ title: 'Rival traces detected', badgeLabel: `${rivals.length}`, rarity: 'rare', meta: 'Named rival NPC pressure is already reserved in state and should eventually surface from this feed.' });
+  if (visiblePlayers.length) {
+    items.push({ title: 'Cultivators in view', badgeLabel: 'online', rarity: 'uncommon', meta: visiblePlayers.map(player => `${player.name} · ${REALM_NAMES[player.realm_index] ?? 'Realm'}`).join(' | ') });
   } else {
-    items.push({ title: 'Rival traffic quiet', badgeLabel: 'npc', rarity: 'common', meta: 'NPC world pressure is not resolving on this tile yet, but this is the surface where it should appear.' });
+    items.push({ title: 'No nearby player signatures', badgeLabel: 'quiet', rarity: 'common', meta: 'Nearby player nameplates will surface here as cultivators cross your current route.' });
   }
 
-  if (selectedTile.cityId || currentTile.cityId) {
-    const cityTile = selectedTile.cityId ? selectedTile : currentTile;
-    items.push({ title: `${cityTile.name} sovereignty`, badgeLabel: 'city', rarity: 'common', meta: 'Settlement patrols, market crowding, and visiting players should eventually read from this same live presence lane.' });
-  }
+  cityRoster.forEach(entry => items.push(entry));
 
   if (list) {
     list.innerHTML = items.map(entry => `
@@ -2223,51 +2315,25 @@ function renderWorldPresenceFeed(currentTile, selectedTile) {
       </li>
     `).join('');
   }
-
-  if (compact) {
-    const worldHistory = Array.isArray(_gameState?.worldEventHistory) ? _gameState.worldEventHistory : [];
-    const feed = [];
-    if (route) {
-      const toTile = getRegionTile(route.regionId, route.toX, route.toY);
-      feed.push(`Transit underway toward ${toTile.name || TILE_TERRAIN_NAMES[toTile.t]}.`);
-    }
-    worldHistory.slice(-5).forEach(entry => feed.push(typeof entry === 'string' ? entry : (entry?.text || entry?.title || 'World event recorded.')));
-    if (!feed.length) {
-      feed.push('World corridor feed is quiet. Future online-player and NPC pass-bys should surface here while you travel.');
-    }
-    compact.innerHTML = feed.map(line => `<li>${escHtml(line)}</li>`).join('');
-  }
-}
-
-function renderWorldServiceDock(tile, x, y) {
-  const card = document.getElementById('world-city-services-card');
-  const body = document.getElementById('world-city-services');
-  const title = document.getElementById('world-city-services-title');
-  if (!card || !body || !title) return;
-
-  if (!tile.cityId) {
-    card.classList.add('hidden');
-    body.innerHTML = '';
-    return;
-  }
-
-  card.classList.remove('hidden');
-  title.textContent = `${tile.name} Service Dock`;
-  body.innerHTML = `
-    <button type="button" class="btn-sm btn-primary" onclick="openWorldService('bank', ${x}, ${y})">Silver Vault</button>
-    <button type="button" class="btn-sm btn-ghost" onclick="openWorldService('techniques', ${x}, ${y})">Technique Archive</button>
-    <button type="button" class="btn-sm btn-ghost" onclick="openWorldService('patron', ${x}, ${y})">Patron Hall</button>
-    <button type="button" class="btn-sm btn-ghost" onclick="openWorldService('cityAffairs', ${x}, ${y})">City Affairs</button>
-  `;
 }
 
 function renderWorldSupportPanels(selectedTile, x, y) {
   const regionId = getRenderedRegionId(_gameState);
   const currentTile = getRegionTile(regionId, _gameState?.tileX ?? 9, _gameState?.tileY ?? 6);
+  const title = document.getElementById('world-command-title');
+  const desc = document.getElementById('world-command-desc');
+  const area = getTileAreaProfile(selectedTile);
+
+  if (title) title.textContent = `${area.name} Command Surface`;
+  if (desc) {
+    desc.textContent = selectedTile.cityId === 'ashgate'
+      ? 'Ashgate now routes contracts, rumors, services, and named NPCs through the local field instead of a separate city dock.'
+      : 'Keep the map central while local field actions, contracts, party presence, and logs stay one tab away.';
+  }
+
   renderLocalInspector(selectedTile, x, y);
   renderWorldQuestBoard(currentTile, selectedTile);
   renderWorldPresenceFeed(currentTile, selectedTile);
-  renderWorldServiceDock(selectedTile.cityId ? selectedTile : currentTile, x, y);
 
   const log = document.getElementById('event-log');
   if (log && !log.children.length) {
@@ -2358,6 +2424,40 @@ function renderWorldHud(regionId, px, py, visited) {
   }
 }
 
+function hashString(value) {
+  let hash = 0;
+  const text = String(value || '');
+  for (let index = 0; index < text.length; index += 1) {
+    hash = ((hash << 5) - hash) + text.charCodeAt(index);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+function getLocalVisitorPositions(mapW, mapH, players) {
+  const positions = new Map();
+  if (!players.length) return positions;
+
+  const midX = Math.floor(mapW / 2);
+  const midY = Math.floor(mapH / 2);
+  const candidateSlots = [
+    { x: midX - 2, y: midY },
+    { x: midX + 2, y: midY },
+    { x: midX, y: midY - 2 },
+    { x: midX, y: midY + 2 },
+    { x: midX - 1, y: midY - 1 },
+    { x: midX + 1, y: midY - 1 },
+    { x: midX - 1, y: midY + 1 },
+    { x: midX + 1, y: midY + 1 }
+  ].filter(slot => slot.x > 0 && slot.y > 0 && slot.x < mapW - 1 && slot.y < mapH - 1);
+
+  players.slice(0, candidateSlots.length).forEach((player, index) => {
+    const slot = candidateSlots[(hashString(player.id || player.name) + index) % candidateSlots.length];
+    positions.set(`${slot.x}:${slot.y}`, player);
+  });
+  return positions;
+}
+
 function renderTileMap() {
   const grid = document.getElementById('tile-grid');
   const wrap = document.getElementById('tile-map-wrap');
@@ -2394,6 +2494,7 @@ function renderWorldMapView(grid, wrap, TILE_SIZE) {
   const isTraveling = _travelReadyAt > Date.now();
   const travelRoute = getActiveTravelRoute();
   const visualPos = getVisualTravelPosition(travelRoute);
+  const visiblePlayers = getVisiblePlayers();
   const selectedTile = _selectedWorldTile && _selectedWorldTile.regionId === regionId
     ? _selectedWorldTile
     : { regionId, x: px, y: py };
@@ -2414,6 +2515,8 @@ function renderWorldMapView(grid, wrap, TILE_SIZE) {
       const isSelected = selectedTile.x === x && selectedTile.y === y;
       const isTravelOrigin = travelRoute && x === travelRoute.fromX && y === travelRoute.fromY;
       const isTravelTarget = travelRoute && x === travelRoute.toX && y === travelRoute.toY;
+      const playersHere = visiblePlayers.filter(player => player.regionId === regionId && player.tileX === x && player.tileY === y);
+      const visiblePlayer = playersHere[0] || null;
 
       const div = document.createElement('div');
       let cls = `tile t-${tile.t === '.' ? 'dot' : tile.t}`;
@@ -2427,9 +2530,20 @@ function renderWorldMapView(grid, wrap, TILE_SIZE) {
       if (isTravelTarget) cls += ' t-travel-target';
       if (tile.t === 'C' && tile.cityId) cls += ` city-${tile.cityId}`;
       if (tile.areaId) cls += ` area-${tile.areaId.split('-').slice(0,2).join('-')}`;
+      if (visiblePlayer) cls += ' t-other-player';
       div.className = cls;
-      div.textContent = isPlayer ? '⊕' : (TILE_GLYPHS[tile.t] ?? '·');
-      div.title = tile.name || TILE_TERRAIN_NAMES[tile.t] || 'Unknown terrain';
+      if (isPlayer || visiblePlayer) {
+        const label = isPlayer ? (_character?.name || 'You') : `${visiblePlayer.name}${playersHere.length > 1 ? ` +${playersHere.length - 1}` : ''}`;
+        const glyph = isPlayer ? '⊕' : '◉';
+        div.innerHTML = `<span class="tile-nameplate">${escHtml(label)}</span><span class="tile-glyph">${escHtml(glyph)}</span>`;
+      } else {
+        div.textContent = TILE_GLYPHS[tile.t] ?? '·';
+      }
+      div.title = isPlayer
+        ? `${_character?.name || 'You'} · ${tile.name || TILE_TERRAIN_NAMES[tile.t] || 'Unknown terrain'}`
+        : visiblePlayer
+          ? `${visiblePlayer.name} · ${tile.name || TILE_TERRAIN_NAMES[tile.t] || 'Unknown terrain'}`
+          : tile.name || TILE_TERRAIN_NAMES[tile.t] || 'Unknown terrain';
 
       if (canMove) {
         div.addEventListener('click', () => moveTile(x, y));
@@ -2492,6 +2606,8 @@ function renderLocalMapView(grid, wrap, TILE_SIZE) {
   const mapH = _localMapData.height;
   const tiles = _localMapData.tiles;
   const worldTile = getRegionTile(_localViewTile.regionId, _localViewTile.x, _localViewTile.y);
+  const localVisitors = getVisiblePlayers().filter(player => player.regionId === _localViewTile.regionId && player.tileX === _localViewTile.x && player.tileY === _localViewTile.y);
+  const visitorPositions = getLocalVisitorPositions(mapW, mapH, localVisitors);
   
   grid.innerHTML = '';
   grid.style.gridTemplateColumns = `repeat(${mapW}, ${TILE_SIZE}px)`;
@@ -2504,6 +2620,7 @@ function renderLocalMapView(grid, wrap, TILE_SIZE) {
       if (!subtile) continue;
       
       const isPlayer = x === _localPlayerX && y === _localPlayerY;
+      const visitor = visitorPositions.get(`${x}:${y}`) || null;
       const canStep = Math.abs(x - _localPlayerX) + Math.abs(y - _localPlayerY) === 1;
       const terrainGlyph = subtile.mobs?.length
         ? '☠'
@@ -2519,6 +2636,8 @@ function renderLocalMapView(grid, wrap, TILE_SIZE) {
       
       if (isPlayer) {
         cls += ' is-player';
+      } else if (visitor) {
+        cls += ' has-visitor';
       } else if (canStep && subtile.terrain !== '#' && subtile.terrain !== 'B') {
         cls += ' is-adjacent';
       } else if (subtile.resources?.length) {
@@ -2527,6 +2646,8 @@ function renderLocalMapView(grid, wrap, TILE_SIZE) {
         cls += ' has-mob';
       } else if (subtile.hazards?.length) {
         cls += ' has-hazard';
+      } else if (subtile.npcName) {
+        cls += ' has-npc';
       }
       
       if (subtile.terrain === '#') {
@@ -2534,10 +2655,16 @@ function renderLocalMapView(grid, wrap, TILE_SIZE) {
       }
       
       div.className = cls;
-      div.textContent = isPlayer ? '⊕' : terrainGlyph;
-      div.title = `[${x},${y}] ${subtile.terrain_kind}`;
+      const label = isPlayer
+        ? (_character?.name || 'You')
+        : visitor?.name || subtile.npcName || subtile.label || '';
+      const glyph = isPlayer ? '⊕' : visitor ? '◉' : terrainGlyph;
+      div.innerHTML = `${label ? `<span class="local-tile-nameplate">${escHtml(label)}</span>` : ''}<span class="local-tile-glyph">${escHtml(glyph)}</span>`;
+      div.title = visitor
+        ? `${visitor.name} · ${subtile.label || subtile.terrain_kind}`
+        : `[${x},${y}] ${subtile.terrain_kind}`;
       
-      if (!isPlayer && canStep && subtile.terrain !== '#' && subtile.terrain !== 'B') {
+      if (!isPlayer && !visitor && canStep && subtile.terrain !== '#' && subtile.terrain !== 'B') {
         div.addEventListener('click', () => {
           if (moveLocalPlayer(x, y)) {
             renderTileMap();
@@ -2717,9 +2844,6 @@ function showTileInfo(tile, x, y, options = {}) {
   if (tile.spiritDensity) {
     actionButtons.push(`<button type="button" class="btn-sm ${isPlayer && !isTraveling ? 'btn-primary' : 'btn-ghost'}" onclick="${isPlayer && !isTraveling ? `performTileFieldAction('spirit', ${x}, ${y})` : `previewWorldAction('spirit', ${x}, ${y})`}">${isPlayer && !isTraveling ? 'Resonate' : 'Qi Survey'}</button>`);
   }
-  if (tile.cityId) {
-    actionButtons.push(`<button type="button" class="btn-sm btn-ghost" onclick="previewWorldAction('city', ${x}, ${y})">City Hooks</button>`);
-  }
   if (isPlayer && !isTraveling) {
     actionButtons.unshift(`<button type="button" class="btn-sm btn-primary" onclick="toggleWorldView()">${_viewMode === 'local' ? 'Back to World Map' : 'Open Local Field'}</button>`);
   }
@@ -2898,17 +3022,26 @@ async function exploreNodeFromTile(nodeId, zoneId) {
   if (tile.areaId) openZoneForArea(tile.areaId, _gameState.tileX ?? 9, _gameState.tileY ?? 6);
 }
 
+function isTypingTarget(target) {
+  if (!target) return false;
+  if (target.isContentEditable) return true;
+  const tag = String(target.tagName || '').toLowerCase();
+  return tag === 'input' || tag === 'textarea' || tag === 'select';
+}
+
 function setupExplorePanel() {
-  document.getElementById('btn-city-affairs')?.addEventListener('click', () => {
-    openWorldService('cityAffairs', _gameState?.tileX ?? 9, _gameState?.tileY ?? 6);
-  });
   document.getElementById('btn-toggle-world-view')?.addEventListener('click', toggleWorldView);
+  document.querySelectorAll('[data-world-tab]').forEach(btn => {
+    btn.addEventListener('click', () => setWorldSupportTab(btn.dataset.worldTab || 'local'));
+  });
   updateWorldViewToggle();
+  updateWorldSupportTabs();
   
   // Keyboard controls for local map navigation
   document.addEventListener('keydown', (e) => {
     if (_viewMode !== 'local' || _localPlayerX === null || _localPlayerY === null) return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (isTypingTarget(e.target) || isTypingTarget(document.activeElement)) return;
     
     let moved = false;
     

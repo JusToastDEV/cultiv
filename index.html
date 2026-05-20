@@ -258,64 +258,39 @@
            </aside>
          </div>
 
-         <div class="world-support-grid">
-           <div class="card world-support-card">
-             <div class="world-card-head">
-               <div>
-                 <h3>Tile Interior</h3>
-                 <p class="card-desc">Walkable sub-sites on the selected tile. This is the first step toward actual on-tile exploration.</p>
-               </div>
-               <div class="world-card-head-actions">
-                 <button class="btn-sm btn-ghost" id="btn-toggle-world-view" type="button">Focus Local View</button>
-                 <span class="panel-meta" id="world-site-summary">Select a tile to inspect its local sites.</span>
-               </div>
+         <div class="card world-command-card">
+           <div class="world-card-head world-command-head">
+             <div>
+               <h3 id="world-command-title">World Command Surface</h3>
+               <p class="card-desc" id="world-command-desc">Keep the map central while local field actions, contracts, party presence, and logs stay one tab away.</p>
+             </div>
+             <div class="world-card-head-actions world-tab-nav">
+               <button class="btn-sm btn-ghost world-tab-btn is-active" type="button" data-world-tab="local">Local</button>
+               <button class="btn-sm btn-ghost world-tab-btn" type="button" data-world-tab="quests">Quests</button>
+               <button class="btn-sm btn-ghost world-tab-btn" type="button" data-world-tab="party">Party</button>
+               <button class="btn-sm btn-ghost world-tab-btn" type="button" data-world-tab="log">Log</button>
+             </div>
+           </div>
+
+           <div class="world-tab-panel is-active" data-world-tab-panel="local">
+             <div class="world-command-meta">
+               <button class="btn-sm btn-ghost" id="btn-toggle-world-view" type="button">Explore Local Tile</button>
+               <span class="panel-meta" id="world-site-summary">Select a tile to inspect its local field.</span>
              </div>
              <div class="world-local-grid" id="world-local-grid"></div>
              <div class="world-local-site-detail" id="world-local-site-detail"></div>
            </div>
 
-           <div class="card world-support-card">
-             <div class="world-card-head">
-               <div>
-                 <h3>Quest Log &amp; Rumors</h3>
-                 <p class="card-desc">Current leads, contracts, and area hooks, organized around where you actually are.</p>
-               </div>
-             </div>
+           <div class="world-tab-panel" data-world-tab-panel="quests">
              <ul id="available-events-list" class="quest-list"></ul>
-             <div class="btn-row mt-sm">
-               <button class="btn-sm" data-action="cityAction" id="btn-city-affairs">City Affairs</button>
-             </div>
            </div>
 
-           <div class="card world-support-card">
-             <div class="world-card-head">
-               <div>
-                 <h3>Live Presence</h3>
-                 <p class="card-desc">Companions, rivals, travel corridors, and the future online encounter lane.</p>
-               </div>
-             </div>
+           <div class="world-tab-panel" data-world-tab-panel="party">
+             <div class="world-party-summary" id="world-party-summary"></div>
              <ul id="world-presence-list" class="quest-list"></ul>
-             <h4 class="mt-sm">Travel Feed</h4>
-             <ol id="event-log-compact" class="event-log-compact"></ol>
            </div>
 
-           <div class="card world-support-card hidden" id="world-city-services-card">
-             <div class="world-card-head">
-               <div>
-                 <h3 id="world-city-services-title">Settlement Dock</h3>
-                 <p class="card-desc">Banking, archive, and settlement hooks without leaving the World surface.</p>
-               </div>
-             </div>
-             <div class="world-service-dock" id="world-city-services"></div>
-           </div>
-
-           <div class="card world-support-card world-log-card">
-             <div class="world-card-head">
-               <div>
-                 <h3>World Log</h3>
-                 <p class="card-desc">Latest actions, travel updates, and field notes.</p>
-               </div>
-             </div>
+           <div class="world-tab-panel" data-world-tab-panel="log">
              <ol id="event-log" class="event-log"></ol>
            </div>
          </div>
