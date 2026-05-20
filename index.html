@@ -255,44 +255,44 @@
                  <div class="tile-detail-status">Open the World panel and the current tile will auto-populate here with nearby routes, resource hints, and live travel state.</div>
                </div>
              </div>
+
+              <div class="card world-command-card">
+                <div class="world-card-head world-command-head">
+                  <div>
+                    <h3 id="world-command-title">World Command Surface</h3>
+                    <p class="card-desc" id="world-command-desc">Keep the map central while local field actions, contracts, party presence, and logs stay one tab away.</p>
+                  </div>
+                  <div class="world-card-head-actions world-tab-nav">
+                    <button class="btn-sm btn-ghost world-tab-btn is-active" type="button" data-world-tab="local">Local</button>
+                    <button class="btn-sm btn-ghost world-tab-btn" type="button" data-world-tab="quests">Quests</button>
+                    <button class="btn-sm btn-ghost world-tab-btn" type="button" data-world-tab="party">Party</button>
+                    <button class="btn-sm btn-ghost world-tab-btn" type="button" data-world-tab="log">Log</button>
+                  </div>
+                </div>
+
+                <div class="world-tab-panel is-active" data-world-tab-panel="local">
+                  <div class="world-command-meta">
+                    <button class="btn-sm btn-ghost" id="btn-toggle-world-view" type="button">Explore Local Tile</button>
+                    <span class="panel-meta" id="world-site-summary">Select a tile to inspect its local field.</span>
+                  </div>
+                  <div class="world-local-grid" id="world-local-grid"></div>
+                  <div class="world-local-site-detail" id="world-local-site-detail"></div>
+                </div>
+
+                <div class="world-tab-panel" data-world-tab-panel="quests">
+                  <ul id="available-events-list" class="quest-list"></ul>
+                </div>
+
+                <div class="world-tab-panel" data-world-tab-panel="party">
+                  <div class="world-party-summary" id="world-party-summary"></div>
+                  <ul id="world-presence-list" class="quest-list"></ul>
+                </div>
+
+                <div class="world-tab-panel" data-world-tab-panel="log">
+                  <ol id="event-log" class="event-log"></ol>
+                </div>
+              </div>
            </aside>
-         </div>
-
-         <div class="card world-command-card">
-           <div class="world-card-head world-command-head">
-             <div>
-               <h3 id="world-command-title">World Command Surface</h3>
-               <p class="card-desc" id="world-command-desc">Keep the map central while local field actions, contracts, party presence, and logs stay one tab away.</p>
-             </div>
-             <div class="world-card-head-actions world-tab-nav">
-               <button class="btn-sm btn-ghost world-tab-btn is-active" type="button" data-world-tab="local">Local</button>
-               <button class="btn-sm btn-ghost world-tab-btn" type="button" data-world-tab="quests">Quests</button>
-               <button class="btn-sm btn-ghost world-tab-btn" type="button" data-world-tab="party">Party</button>
-               <button class="btn-sm btn-ghost world-tab-btn" type="button" data-world-tab="log">Log</button>
-             </div>
-           </div>
-
-           <div class="world-tab-panel is-active" data-world-tab-panel="local">
-             <div class="world-command-meta">
-               <button class="btn-sm btn-ghost" id="btn-toggle-world-view" type="button">Explore Local Tile</button>
-               <span class="panel-meta" id="world-site-summary">Select a tile to inspect its local field.</span>
-             </div>
-             <div class="world-local-grid" id="world-local-grid"></div>
-             <div class="world-local-site-detail" id="world-local-site-detail"></div>
-           </div>
-
-           <div class="world-tab-panel" data-world-tab-panel="quests">
-             <ul id="available-events-list" class="quest-list"></ul>
-           </div>
-
-           <div class="world-tab-panel" data-world-tab-panel="party">
-             <div class="world-party-summary" id="world-party-summary"></div>
-             <ul id="world-presence-list" class="quest-list"></ul>
-           </div>
-
-           <div class="world-tab-panel" data-world-tab-panel="log">
-             <ol id="event-log" class="event-log"></ol>
-           </div>
          </div>
        </section>
 
