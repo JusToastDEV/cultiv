@@ -2297,6 +2297,81 @@ button.btn-locked {
   font-size:.72rem;
   line-height:1.35;
 }
+
+/* ── Local mini-map grid ────────────────────────────────────── */
+.local-mini-tile {
+  min-height:50px;
+  border:1px solid rgba(201,162,50,.15);
+  border-radius:4px;
+  background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(0,0,0,.08));
+  color:var(--ink-1);
+  padding:0.5rem 0.35rem;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:0.25rem;
+  text-align:center;
+  transition:border-color .12s ease, transform .12s ease, background-color .12s ease, box-shadow .12s ease;
+  cursor:pointer;
+  font-size:0.8rem;
+}
+.local-mini-tile:hover {
+  border-color:rgba(201,162,50,.35);
+  transform:scale(1.05);
+  background:linear-gradient(180deg, rgba(201,162,50,.06), rgba(0,0,0,.10));
+}
+.local-mini-tile.is-player {
+  border-color:rgba(58,125,96,.6);
+  box-shadow:0 0 0 2px rgba(58,125,96,.25), inset 0 1px 0 rgba(58,125,96,.15);
+  background:linear-gradient(180deg, rgba(58,125,96,.12), rgba(58,125,96,.05));
+}
+.local-mini-icon {
+  font-size:1.25rem;
+  line-height:1;
+}
+.local-mini-label {
+  font-size:0.65rem;
+  line-height:1.2;
+  opacity:0.85;
+}
+
+/* Local tile type styles */
+.local-mini-tile.kind-gather {
+  --border: rgba(152,170,65,.25);
+}
+.local-mini-tile.kind-ore {
+  --border: rgba(181,127,79,.25);
+}
+.local-mini-tile.kind-mob {
+  --border: rgba(201,65,76,.25);
+}
+.local-mini-tile.kind-spirit {
+  --border: rgba(152,125,201,.25);
+}
+.local-mini-tile.kind-hazard {
+  --border: rgba(255,127,39,.25);
+}
+.local-mini-tile.kind-travel {
+  --border: rgba(100,125,150,.25);
+}
+.local-mini-tile.kind-civic,
+.local-mini-tile.kind-trade,
+.local-mini-tile.kind-vault,
+.local-mini-tile.kind-archive,
+.local-mini-tile.kind-rumor,
+.local-mini-tile.kind-sect,
+.local-mini-tile.kind-relic {
+  --border: rgba(201,162,50,.25);
+}
+
+.local-mini-tile {
+  border-color: var(--border, rgba(201,162,50,.15));
+}
+.local-mini-tile:hover {
+  border-color: var(--border, rgba(201,162,50,.35));
+}
+
 .world-local-site-detail {
   margin-top:.75rem;
   border:1px solid rgba(201,162,50,.12);

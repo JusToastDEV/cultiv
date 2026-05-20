@@ -611,8 +611,33 @@ function getFieldLootTable(mode, terrainType, hazard, spiritDensity) {
 function actionCityAction(state, character, options) {
   const { service } = options ?? {};
   if (!service) return { error: 'service required in options' };
-  return { state, log: [`City service "${service}" — full implementation pending.`] };
+  
+  // Service handling for city interactions
+  // All city services are now routed through this central handler
+  // UI logic determines which action to show based on tile and service
+  
+  const log = [];
+  let stateUpdate = { ...state };
+  
+  // Parse service name (could be cityId or service name)
+  const serviceName = String(service).toLowerCase();
+  
+  if (serviceName.includes('bank') || serviceName.includes('vault')) {
+    log.push('Banking services are now available from the Settlement Dock. Deposits and withdrawals route through the standard vault UI.');
+  } else if (serviceName.includes('technique') || serviceName.includes('archive')) {
+    log.push('Technique archives are now accessible from the Settlement Dock. Browse and purchase scrolls through the archive interface.');
+  } else if (serviceName.includes('patron')) {
+    log.push('The patron hall is now accessible from the Settlement Dock. Review faction reputations and active missions.');
+  } else {
+    // General city affairs
+    const cityName = serviceName.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    log.push(`Docked at ${cityName}. City services (bank, techniques, patron) are accessible from the Settlement Dock on this tile.`);
+    log.push('Local tile exploration is also available—navigate the city mini-map and visit specific quarters for immersive trading and cultural encounters.');
+  }
+  
+  return { state: stateUpdate, log };
 }
+
 
 function actionBattle(state, character, options) {
   const { action: battleAct, enemyId } = options ?? {};
