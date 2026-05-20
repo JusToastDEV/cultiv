@@ -70,6 +70,9 @@ let _localMapData = null;        // {width, height, tiles: [{x, y, terrain, reso
 let _localMapSeed = null;        // Deterministic seed for consistent map generation
 let _localEntryDir = null;       // Entry direction for spawn positioning
 let _worldSupportTab = 'local';
+let _worldQuestSurfaceLeads = [];
+let _selectedWorldQuestEntryId = null;
+let _renderedWorldQuestEntries = [];
 
 // Realm names for display
 const REALM_NAMES = [
@@ -517,6 +520,9 @@ async function signOut() {
     forgetGuestMode();
     stopGuestSync();
     _account = _character = _gameState = null;
+    _worldQuestSurfaceLeads = [];
+    _selectedWorldQuestEntryId = null;
+    _renderedWorldQuestEntries = [];
     window._activeCharId = null;
     updateTopbarLogoutLabel();
     showScreen('auth');
@@ -525,6 +531,9 @@ async function signOut() {
 
   await API.post('/api/auth/logout');
   _account = _character = _gameState = null;
+  _worldQuestSurfaceLeads = [];
+  _selectedWorldQuestEntryId = null;
+  _renderedWorldQuestEntries = [];
   window._activeCharId = null;
   stopPolling();
   stopGuestSync();
@@ -1789,11 +1798,52 @@ function getLocalActionForSubtile(worldTile, subtile) {
 
 function getAshgateQuestEntries() {
   return [
-    { title: 'Register with Iron Guild', badgeLabel: 'guild', rarity: 'common', meta: 'Gain faction access, a stipend, and guild contracts.' },
-    { title: 'Petition Ashen Frontier Sect', badgeLabel: 'sect', rarity: 'common', meta: 'Seek outer court affiliation and sect-backed work.' },
-    { title: 'Forgotten Fangkou Grove', badgeLabel: 'common', rarity: 'common', meta: 'You discover an untouched grove radiating with spirit essence.' },
-    { title: 'Street Duel Challenge', badgeLabel: 'uncommon', rarity: 'uncommon', meta: 'A plaza showoff is baiting passersby into public duels.', sense: 'Soul Sense: Their meridians flicker unevenly. The bravado is real, but the circulation underneath it is unstable and easy to bait.' },
-    { title: 'Stolen Weapon Recovered', badgeLabel: 'common', rarity: 'common', meta: 'You track down a thief who robbed a blacksmith.' }
+    {
+      id: 'ashgate-guild-registration',
+      title: 'Register with Iron Guild',
+      badgeLabel: 'guild',
+      rarity: 'common',
+      meta: 'Gain faction access, a stipend, and guild contracts.',
+      detail: 'Registrar Kesh controls Ashgate\'s guild intake. Report to the dispatch yard or guild hall in local view to take stipend work and start your contract line.',
+      service: 'guild'
+    },
+    {
+      id: 'ashgate-sect-petition',
+      title: 'Petition Ashen Frontier Sect',
+      badgeLabel: 'sect',
+      rarity: 'common',
+      meta: 'Seek outer court affiliation and sect-backed work.',
+      detail: 'Outer Disciple Ren screens prospects through the sect court. Local field access is the route to the petition desk, trial lane, and follow-up errands.',
+      service: 'sect'
+    },
+    {
+      id: 'ashgate-fangkou-grove',
+      title: 'Forgotten Fangkou Grove',
+      badgeLabel: 'rumor',
+      rarity: 'common',
+      meta: 'You discover an untouched grove radiating with spirit essence.',
+      detail: 'Scout Ilya is circulating a route toward Fangkou Grove. Mark it from the local scout post, then keep it in your field feed until travel routing expands.',
+      service: 'rumor'
+    },
+    {
+      id: 'ashgate-street-duel',
+      title: 'Street Duel Challenge',
+      badgeLabel: 'duel',
+      rarity: 'uncommon',
+      meta: 'A plaza showoff is baiting passersby into public duels.',
+      detail: 'Showoff Jian is using the plaza ring as a live social choke point. Talk to him on the local field to keep the challenge staged for the combat pass.',
+      sense: 'Soul Sense: Their meridians flicker unevenly. The bravado is real, but the circulation underneath it is unstable and easy to bait.',
+      service: 'duel'
+    },
+    {
+      id: 'ashgate-stolen-weapon',
+      title: 'Stolen Weapon Recovered',
+      badgeLabel: 'forge',
+      rarity: 'common',
+      meta: 'You track down a thief who robbed a blacksmith.',
+      detail: 'Smith Haro is pushing alley routes and recovery chatter through Forge Row. Use the local field to take the lead directly from the forge lane.',
+      service: 'blacksmith'
+    }
   ];
 }
 
@@ -1804,6 +1854,183 @@ function getAshgateRoster() {
     { title: 'Broker Nuo', badgeLabel: 'patron', rarity: 'common', meta: 'Patron Hall broker tracking requests, rumors, and quiet commissions.' },
     { title: 'Showoff Jian', badgeLabel: 'duel', rarity: 'uncommon', meta: 'Arena loudmouth drawing challengers into public tests of nerve.' }
   ];
+}
+
+function slugifySurfaceKey(value) {
+  return String(value || 'entry')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'entry';
+}
+
+function getSelectedWorldSupportTile() {
+  const regionId = _selectedWorldTile?.regionId ?? getRenderedRegionId(_gameState);
+  const x = _selectedWorldTile?.x ?? (_gameState?.tileX ?? 9);
+  const y = _selectedWorldTile?.y ?? (_gameState?.tileY ?? 6);
+  return { regionId, x, y, tile: getRegionTile(regionId, x, y) };
+}
+
+function rerenderWorldSupportSurface() {
+  const current = getSelectedWorldSupportTile();
+  if (!current.tile) return;
+  renderWorldSupportPanels(current.tile, current.x, current.y);
+}
+
+function upsertWorldQuestLead(entry) {
+  if (!entry) return;
+  const normalized = {
+    id: entry.id || `lead-${slugifySurfaceKey(entry.title)}`,
+    title: entry.title || 'Marked lead',
+    badgeLabel: entry.badgeLabel || 'lead',
+    rarity: entry.rarity || 'common',
+    meta: entry.meta || 'Field lead marked.',
+    detail: entry.detail || entry.meta || 'Field lead marked.',
+    sense: entry.sense || '',
+    actionLabel: entry.actionLabel || '',
+    actionKind: entry.actionKind || 'ghost',
+    action: entry.action || null
+  };
+  _worldQuestSurfaceLeads = [
+    normalized,
+    ..._worldQuestSurfaceLeads.filter(item => item.id !== normalized.id)
+  ].slice(0, 16);
+  _selectedWorldQuestEntryId = normalized.id;
+}
+
+function selectWorldQuestEntry(entryId) {
+  _selectedWorldQuestEntryId = entryId;
+  rerenderWorldSupportSurface();
+}
+
+function activateWorldQuestEntry(entryId) {
+  const entry = _renderedWorldQuestEntries.find(item => item.id === entryId);
+  if (entry?.action && typeof entry.action.run === 'function') {
+    entry.action.run();
+  }
+}
+
+function buildWorldQuestEntries(currentTile, selectedTile, x, y) {
+  const selectedArea = getTileAreaProfile(selectedTile);
+  const isAshgate = (selectedTile.cityId || currentTile.cityId) === 'ashgate';
+  const isLocalActive = _viewMode === 'local'
+    && _localMapData
+    && _localViewTile
+    && _localViewTile.x === x
+    && _localViewTile.y === y;
+  const subtile = isLocalActive ? getLocalPlayerTile() : null;
+  const localAction = subtile ? getLocalActionForSubtile(selectedTile, subtile) : null;
+  const visitors = isLocalActive
+    ? getVisiblePlayers().filter(player => player.regionId === (_localViewTile?.regionId ?? '') && player.tileX === x && player.tileY === y)
+    : [];
+  const liveQuests = Array.isArray(_gameState?.questLog) ? _gameState.questLog : [];
+  const entries = [];
+
+  if (subtile?.service || subtile?.npcName) {
+    const npcLabel = subtile.npcName || titleizeSlug(subtile.service || subtile.label || 'contact');
+    entries.push({
+      id: `contact-${slugifySurfaceKey(`${subtile.service || 'contact'}-${npcLabel}-${x}-${y}-${_localPlayerX}-${_localPlayerY}`)}`,
+      title: subtile.npcName ? `Speak with ${subtile.npcName}` : npcLabel,
+      badgeLabel: subtile.service || 'contact',
+      rarity: 'common',
+      meta: `${subtile.district || selectedArea.name} · ${subtile.label || titleizeSlug(subtile.terrain_kind || 'local contact')}`,
+      detail: visitors.length
+        ? `${npcLabel} is currently sharing this tile with ${visitors.map(player => player.name).join(', ')}. Talk here to pull work, services, or dialogue from the active local contact.`
+        : `${npcLabel} is active on this tile. Use the local field to talk here instead of leaving the command surface disconnected from the map.`,
+      actionLabel: subtile.npcName ? `Talk to ${subtile.npcName}` : `Open ${npcLabel}`,
+      actionKind: 'primary',
+      action: subtile.service
+        ? { run: () => handleLocalCityAction(subtile.service, x, y) }
+        : null
+    });
+  }
+
+  if (subtile?.questHook) {
+    entries.push({
+      id: `hook-${slugifySurfaceKey(subtile.questHook)}`,
+      title: subtile.questHook,
+      badgeLabel: 'hook',
+      rarity: 'common',
+      meta: `${subtile.district || selectedArea.name} · ${subtile.label || titleizeSlug(subtile.terrain_kind || 'district lead')}`,
+      detail: subtile.npcName
+        ? `${subtile.npcName} is attached to this local lead. Stay in the district to continue it, or switch tabs to keep it visible while you route the next step.`
+        : 'This local district is carrying a direct lead. Keep it marked in the command surface while you work the surrounding field.',
+      actionLabel: 'Return to local contact',
+      actionKind: 'ghost',
+      action: { run: () => setWorldSupportTab('local') }
+    });
+  }
+
+  if (localAction) {
+    entries.push({
+      id: `field-${slugifySurfaceKey(localAction)}-${x}-${y}`,
+      title: `${titleizeSlug(localAction)} route`,
+      badgeLabel: 'field',
+      rarity: selectedTile.mobs?.length ? 'uncommon' : 'common',
+      meta: `${selectedArea.name} · ${subtile?.label || titleizeSlug(subtile?.terrain_kind || 'field node')}`,
+      detail: `This local tile can resolve a live ${titleizeSlug(localAction).toLowerCase()} cycle from the command surface while you remain on the field.`,
+      actionLabel: `Work ${titleizeSlug(localAction)}`,
+      actionKind: 'primary',
+      action: { run: () => performTileFieldAction(localAction, x, y) }
+    });
+  }
+
+  _worldQuestSurfaceLeads.forEach(entry => {
+    entries.push({
+      ...entry,
+      badgeLabel: entry.badgeLabel || 'marked',
+      detail: entry.detail || entry.meta || 'Field lead marked.'
+    });
+  });
+
+  if (isAshgate) {
+    getAshgateQuestEntries().forEach(entry => entries.push({ ...entry }));
+  }
+
+  liveQuests.forEach((quest, index) => {
+    if (typeof quest === 'string') {
+      entries.push({
+        id: `live-${index}-${slugifySurfaceKey(quest)}`,
+        title: quest,
+        badgeLabel: 'active',
+        rarity: 'uncommon',
+        meta: 'Tracked from the live quest log.',
+        detail: 'This objective is already in your live quest log and remains visible from the command surface while you route across the world and local field.'
+      });
+      return;
+    }
+    const title = quest.title || quest.name || `Quest ${index + 1}`;
+    entries.push({
+      id: quest.id || `live-${index}-${slugifySurfaceKey(title)}`,
+      title,
+      badgeLabel: quest.status || 'active',
+      rarity: quest.rarity || 'uncommon',
+      meta: quest.summary || quest.description || 'Active objective.',
+      detail: quest.description || quest.summary || 'This live objective is being tracked from the backend quest log.',
+      sense: quest.sense || ''
+    });
+  });
+
+  if (!entries.length) {
+    entries.push({
+      id: `survey-${x}-${y}`,
+      title: `Survey ${selectedArea.name}`,
+      badgeLabel: 'field',
+      rarity: 'common',
+      meta: `Walk the local field, inspect resource lanes, and stage the next move through this ${selectedArea.focusLabel.toLowerCase()} tile.`,
+      detail: 'There are no live contracts keyed here yet. Use the local tab to walk the field and surface the next NPC or node-driven lead.'
+    });
+  }
+
+  const deduped = [];
+  const seen = new Set();
+  entries.forEach(entry => {
+    const entryId = entry.id || `entry-${slugifySurfaceKey(entry.title)}`;
+    if (seen.has(entryId)) return;
+    seen.add(entryId);
+    deduped.push({ ...entry, id: entryId });
+  });
+
+  return deduped;
 }
 
 function closeInteractionModal() {
@@ -1871,7 +2098,8 @@ function showInteractionModal(config) {
   modal.setAttribute('aria-hidden', 'false');
 }
 
-function applyInteractionOutcome(tile, x, y, { tab = 'local', message = '', toastLabel = '', toastType = 'ok' } = {}) {
+function applyInteractionOutcome(tile, x, y, { tab = 'local', message = '', toastLabel = '', toastType = 'ok', lead = null } = {}) {
+  if (lead) upsertWorldQuestLead(lead);
   if (tab) setWorldSupportTab(tab);
   if (message) {
     appendToLog(message);
@@ -1910,7 +2138,15 @@ function handleLocalCityAction(actionKey, x, y) {
           run: () => applyInteractionOutcome(tile, x, y, {
             tab: 'quests',
             message: 'Registrar Kesh marks the current Iron Guild slate and routes the active leads into your quest feed.',
-            toastLabel: 'Contracts marked'
+            toastLabel: 'Contracts marked',
+            lead: {
+              id: 'ashgate-guild-registration',
+              title: 'Register with Iron Guild',
+              badgeLabel: 'guild',
+              rarity: 'common',
+              meta: 'Gain faction access, a stipend, and guild contracts.',
+              detail: 'Registrar Kesh has marked the intake process and pinned it to your command surface. Return to the guild yard in local view whenever you want to continue the onboarding route.'
+            }
           })
         },
         { label: 'Back to district', detail: 'Stay on the local field and keep moving.', kind: 'ghost', run: () => {} }
@@ -1930,7 +2166,15 @@ function handleLocalCityAction(actionKey, x, y) {
           run: () => applyInteractionOutcome(tile, x, y, {
             tab: 'quests',
             message: 'Outer Disciple Ren routes you toward the current court errand and marks it in your Ashgate field log.',
-            toastLabel: 'Sect lead marked'
+            toastLabel: 'Sect lead marked',
+            lead: {
+              id: 'ashgate-sect-petition',
+              title: 'Petition Ashen Frontier Sect',
+              badgeLabel: 'sect',
+              rarity: 'common',
+              meta: 'Seek outer court affiliation and sect-backed work.',
+              detail: 'Ren has pushed the sect petition into your command surface. The court remains the live entry point for the next pass of sect work.'
+            }
           })
         },
         { label: 'Back to district', detail: 'Keep the field view active.', kind: 'ghost', run: () => {} }
@@ -1949,7 +2193,15 @@ function handleLocalCityAction(actionKey, x, y) {
           run: () => applyInteractionOutcome(tile, x, y, {
             tab: 'quests',
             message: 'Smith Haro gives you the alley route and marks the stolen-weapon trail for follow-up.',
-            toastLabel: 'Trail marked'
+            toastLabel: 'Trail marked',
+            lead: {
+              id: 'ashgate-stolen-weapon',
+              title: 'Stolen Weapon Recovered',
+              badgeLabel: 'forge',
+              rarity: 'common',
+              meta: 'You track down a thief who robbed a blacksmith.',
+              detail: 'The forge row recovery lead is now pinned to your quest surface, so you can leave and return without losing the thread.'
+            }
           })
         },
         { label: 'Back to district', detail: 'Return to the field without taking the lead yet.', kind: 'ghost', run: () => {} }
@@ -1968,7 +2220,15 @@ function handleLocalCityAction(actionKey, x, y) {
           run: () => applyInteractionOutcome(tile, x, y, {
             tab: 'quests',
             message: 'Scout Ilya sketches the Fangkou route and pushes the grove rumor into your active Ashgate leads.',
-            toastLabel: 'Rumor marked'
+            toastLabel: 'Rumor marked',
+            lead: {
+              id: 'ashgate-fangkou-grove',
+              title: 'Forgotten Fangkou Grove',
+              badgeLabel: 'rumor',
+              rarity: 'common',
+              meta: 'You discover an untouched grove radiating with spirit essence.',
+              detail: 'The scout post has pinned the Fangkou route to your quest surface. Leave it marked there until travel-route planning is ready.'
+            }
           })
         },
         { label: 'Back to district', detail: 'Keep walking Ashgate.', kind: 'ghost', run: () => {} }
@@ -1989,7 +2249,15 @@ function handleLocalCityAction(actionKey, x, y) {
             tab: 'quests',
             message: 'Showoff Jian calls for a public duel and the challenge is marked for the next combat pass.',
             toastLabel: 'Duel staged',
-            toastType: 'warn'
+            toastType: 'warn',
+            lead: {
+              id: 'ashgate-street-duel',
+              title: 'Street Duel Challenge',
+              badgeLabel: 'duel',
+              rarity: 'uncommon',
+              meta: 'A plaza showoff is baiting passersby into public duels.',
+              detail: 'The challenge is pinned to your quest surface until the duel/combat pass is expanded.'
+            }
           })
         },
         { label: 'Back to district', detail: 'Ignore the ring for now.', kind: 'ghost', run: () => {} }
@@ -2647,67 +2915,20 @@ function renderLocalTileMap(tile, x, y) {
 
 function renderWorldQuestBoard(currentTile, selectedTile) {
   const list = document.getElementById('available-events-list');
-  if (!list) return;
+  const detail = document.getElementById('world-quest-detail');
+  if (!list || !detail) return;
 
-  const quests = Array.isArray(_gameState?.questLog) ? _gameState.questLog : [];
-  const selectedArea = getTileAreaProfile(selectedTile);
-  const entries = [];
+  const x = _selectedWorldTile?.x ?? (_gameState?.tileX ?? 9);
+  const y = _selectedWorldTile?.y ?? (_gameState?.tileY ?? 6);
+  const entries = buildWorldQuestEntries(currentTile, selectedTile, x, y);
+  _renderedWorldQuestEntries = entries;
 
-   if ((selectedTile.cityId || currentTile.cityId) === 'ashgate') {
-    getAshgateQuestEntries().forEach(entry => entries.push(entry));
-  }
-
-  quests.forEach((quest, index) => {
-    if (typeof quest === 'string') {
-      entries.push({ title: quest, badgeLabel: 'active', rarity: 'uncommon', meta: 'Tracked from the live quest log.' });
-      return;
-    }
-    entries.push({
-      title: quest.title || quest.name || `Quest ${index + 1}`,
-      badgeLabel: quest.status || 'active',
-      rarity: quest.rarity || 'uncommon',
-      meta: quest.summary || quest.description || 'Active objective.'
-    });
-  });
-
-  if (!entries.length || !((selectedTile.cityId || currentTile.cityId) === 'ashgate')) {
-    entries.push({
-      title: `Survey ${selectedArea.name}`,
-      badgeLabel: 'field',
-      rarity: 'common',
-      meta: `Walk the local field, inspect resource lanes, and stage the next move through this ${selectedArea.focusLabel.toLowerCase()} tile.`
-    });
-  }
-  if (selectedTile.mobs?.length) {
-    entries.push({
-      title: `Track ${titleizeSlug(selectedTile.mobs[0])}`,
-      badgeLabel: 'hunt',
-      rarity: 'uncommon',
-      meta: `Hostile traffic is already mapped here: ${selectedTile.mobs.map(titleizeSlug).join(', ')}.`
-    });
-  }
-  if (selectedTile.herbs?.length) {
-    entries.push({
-      title: `Harvest route reconnaissance`,
-      badgeLabel: 'gather',
-      rarity: 'common',
-      meta: `Known flora on this tile: ${selectedTile.herbs.map(titleizeSlug).join(', ')}.`
-    });
-  }
-  if (selectedTile.ores?.length) {
-    entries.push({
-      title: `Secure extraction line`,
-      badgeLabel: 'ore',
-      rarity: 'common',
-      meta: `This tile shows workable material: ${selectedTile.ores.map(titleizeSlug).join(', ')}.`
-    });
-  }
-  if (!entries.length) {
-    entries.push({ title: 'No active quests', badgeLabel: 'idle', rarity: 'common', meta: 'Rumors, faction contracts, and area leads will surface here once the next quest pass lands.' });
+  if (!entries.find(entry => entry.id === _selectedWorldQuestEntryId)) {
+    _selectedWorldQuestEntryId = entries[0]?.id || null;
   }
 
   list.innerHTML = entries.map(entry => `
-    <li>
+    <li class="world-quest-item is-selectable${entry.id === _selectedWorldQuestEntryId ? ' is-active' : ''}" data-world-quest-id="${escHtml(entry.id)}">
       <div style="flex:1">
         <div class="quest-line-title">
           <span>${escHtml(entry.title)}</span>
@@ -2718,6 +2939,39 @@ function renderWorldQuestBoard(currentTile, selectedTile) {
       </div>
     </li>
   `).join('');
+
+  list.querySelectorAll('[data-world-quest-id]').forEach(node => {
+    node.addEventListener('click', () => selectWorldQuestEntry(node.getAttribute('data-world-quest-id') || ''));
+  });
+
+  const activeEntry = entries.find(entry => entry.id === _selectedWorldQuestEntryId) || entries[0] || null;
+  if (!activeEntry) {
+    detail.innerHTML = '<div class="world-empty-note">No quest lead is selected.</div>';
+    return;
+  }
+
+  detail.innerHTML = `
+    <div class="world-site-detail-head compact">
+      <div>
+        <div class="tile-detail-kicker">Quest Surface</div>
+        <h4 class="world-site-detail-title">${escHtml(activeEntry.title)}</h4>
+      </div>
+      <span class="quest-badge ${escHtml(activeEntry.rarity || 'common')}">${escHtml(activeEntry.badgeLabel)}</span>
+    </div>
+    <div class="world-inline-meta">
+      <span class="tag-city">${escHtml(getTileAreaProfile(selectedTile).name)}</span>
+      <span class="tag-city">${escHtml(_viewMode === 'local' ? 'Local field' : 'World surface')}</span>
+    </div>
+    <div class="world-empty-note world-quest-detail-copy">${escHtml(activeEntry.detail || activeEntry.meta || 'No further quest detail available yet.')}</div>
+    ${activeEntry.sense ? `<div class="quest-line-sense">${escHtml(activeEntry.sense)}</div>` : ''}
+    <div class="world-site-actions world-quest-actions">
+      ${activeEntry.action ? `<button type="button" class="btn-sm ${activeEntry.actionKind === 'primary' ? 'btn-primary' : 'btn-ghost'}" id="world-quest-primary-action">${escHtml(activeEntry.actionLabel || 'Take action')}</button>` : ''}
+      <button type="button" class="btn-sm btn-ghost" id="world-quest-show-local">Show Local Context</button>
+    </div>
+  `;
+
+  detail.querySelector('#world-quest-primary-action')?.addEventListener('click', () => activateWorldQuestEntry(activeEntry.id));
+  detail.querySelector('#world-quest-show-local')?.addEventListener('click', () => setWorldSupportTab('local'));
 }
 
 function renderWorldPresenceFeed(currentTile, selectedTile) {

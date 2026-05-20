@@ -1486,6 +1486,20 @@ button.btn-locked {
 .quest-list li:last-child {
   margin-bottom: 0;
 }
+.quest-list li.is-selectable {
+  cursor:pointer;
+  transition:border-color .14s ease, background-color .14s ease, transform .14s ease, box-shadow .14s ease;
+}
+.quest-list li.is-selectable:hover {
+  border-color:rgba(201,162,50,.28);
+  background:linear-gradient(180deg, rgba(201,162,50,.08), rgba(255,255,255,.03));
+}
+.quest-list li.is-active {
+  border-color:rgba(58,125,96,.42);
+  border-left-color:rgba(58,125,96,.7);
+  box-shadow:0 0 0 1px rgba(58,125,96,.12), inset 0 1px 0 rgba(58,125,96,.08);
+  background:linear-gradient(180deg, rgba(58,125,96,.09), rgba(255,255,255,.03));
+}
 
 .event-log-compact {
   list-style: none;
@@ -2469,6 +2483,25 @@ button.btn-locked {
   grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));
   gap:.55rem;
 }
+.world-quest-surface {
+  display:grid;
+  grid-template-columns:minmax(0, 1.15fr) minmax(260px, .85fr);
+  gap:.8rem;
+  align-items:start;
+}
+.world-quest-surface .quest-list {
+  margin:0;
+}
+.world-quest-detail {
+  margin-top:0;
+  min-height:100%;
+}
+.world-quest-detail-copy {
+  line-height:1.55;
+}
+.world-quest-actions {
+  margin-top:.7rem;
+}
 .world-local-grid.is-inspector {
   grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));
 }
@@ -2867,6 +2900,9 @@ button.btn-locked {
   .world-stat-grid,
   .tile-detail-grid,
   .tile-readout-strip {
+    grid-template-columns:1fr;
+  }
+  .world-quest-surface {
     grid-template-columns:1fr;
   }
   .world-local-grid {
