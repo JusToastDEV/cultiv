@@ -65,6 +65,7 @@ let _viewMode = 'world';         // 'world' or 'local'
 let _localViewTile = null;       // {x, y, regionId} - which world tile's local map we're viewing
 let _localPlayerX = null;        // Player position in local mini-map
 let _localPlayerY = null;
+let _localMovementReadyAt = 0;   // When player can move to next local tile (2 sec cooldown)
 let _localMapData = null;        // {width, height, tiles: [{x, y, terrain, resources, mobs, ...}]}
 let _localMapSeed = null;        // Deterministic seed for consistent map generation
 let _localEntryDir = null;       // Entry direction for spawn positioning
