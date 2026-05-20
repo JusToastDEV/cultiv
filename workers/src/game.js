@@ -303,7 +303,10 @@ export async function handleGameAction(request, env, account) {
   let travelCooldown = 0;
   if (action === 'moveToTile') {
     const tType = options?.terrainType ?? '.';
-    const travelMs = TRAVEL_TIMES[tType] ?? 45000;
+    let travelMs = TRAVEL_TIMES[tType] ?? 45000;
+    if (account.admin_level > 0) {
+      travelMs = Math.max(1000, Math.round(travelMs / 10));
+    }
     await setCooldown(env, character.id, 'travel', travelMs);
     travelCooldown = travelMs;
   }

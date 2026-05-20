@@ -83,6 +83,7 @@
      </div>
 
      <div class="topbar-right">
+       <span class="tb-clock" id="tb-world-clock">00:00 Night</span>
        <span class="tb-silver" id="tb-silver">0 silver</span>
        <button class="tb-menu-toggle" id="sidebar-toggle" type="button" title="Menu">Menu</button>
        <button class="btn-ghost tb-logout" id="topbar-logout" type="button">Sign Out</button>
@@ -226,7 +227,6 @@
                    <strong id="world-explored-count">0 tiles charted</strong>
                  </div>
                </div>
-               <div class="world-nearby-row" id="world-nearby">Nearby routes populate here as you scout.</div>
              </div>
 
              <div class="tile-map-wrap" id="tile-map-wrap">
@@ -265,7 +265,10 @@
                  <h3>Tile Interior</h3>
                  <p class="card-desc">Walkable sub-sites on the selected tile. This is the first step toward actual on-tile exploration.</p>
                </div>
-               <span class="panel-meta" id="world-site-summary">Select a tile to inspect its local sites.</span>
+               <div class="world-card-head-actions">
+                 <button class="btn-sm btn-ghost" id="btn-toggle-world-view" type="button">Focus Local View</button>
+                 <span class="panel-meta" id="world-site-summary">Select a tile to inspect its local sites.</span>
+               </div>
              </div>
              <div class="world-local-grid" id="world-local-grid"></div>
              <div class="world-local-site-detail" id="world-local-site-detail"></div>

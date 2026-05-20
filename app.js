@@ -56,9 +56,12 @@ let _cdAnimFrames = {};
 let _guestMode = false;
 let _travelReadyAt = 0;      // epoch ms when next tile move is allowed
 let _travelTimerInterval = null; // setInterval handle for travel countdown
+let _worldClockTimer = null; // setInterval handle for the live clock UI
 let _selectedWorldTile = null;
 let _selectedTileSite = null;
 let _travelRoute = null;
+let _lastTileEntry = null;
+let _localViewFocused = false;
 
 // Realm names for display
 const REALM_NAMES = [
@@ -579,10 +582,26 @@ function startPolling() {
   if (_pollTimer) clearInterval(_pollTimer);
   _pollTimer = setInterval(pollState, 30000); // every 30s
   pollState();
+  startWorldClockTimer();
 }
 
 function stopPolling() {
   if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+  stopWorldClockTimer();
+}
+
+function startWorldClockTimer() {
+  if (_worldClockTimer) clearInterval(_worldClockTimer);
+  const updateClock = () => {
+    const clock = document.getElementById('tb-world-clock');
+    if (clock) clock.textContent = getLiveClockText();
+  };
+  updateClock();
+  _worldClockTimer = setInterval(updateClock, 10000);
+}
+
+function stopWorldClockTimer() {
+  if (_worldClockTimer) { clearInterval(_worldClockTimer); _worldClockTimer = null; }
 }
 
 async function pollState() {
@@ -609,6 +628,18 @@ function renderAll() {
   if (document.getElementById('panel-explore')?.classList.contains('active')) renderTileMap();
 }
 
+function getLiveClockText() {
+  const now = new Date();
+  const hour = now.getHours();
+  const minute = String(now.getMinutes()).padStart(2, '0');
+  let phase = 'Night';
+  if (hour >= 5 && hour < 8) phase = 'Dawn';
+  else if (hour >= 8 && hour < 12) phase = 'Morning';
+  else if (hour >= 12 && hour < 17) phase = 'Afternoon';
+  else if (hour >= 17 && hour < 20) phase = 'Dusk';
+  return `${String(hour).padStart(2, '0')}:${minute} ${phase}`;
+}
+
 function renderTopBar() {
   const s = _gameState;
   const c = _character;
@@ -630,6 +661,8 @@ function renderTopBar() {
   if (qi) qi.textContent = `${s.qi}/${s.qiMax}`;
   if (bqi) bqi.textContent = `${s.battleQi}/${s.battleQiMax}`;
   if (silver) silver.textContent = `${s.silver ?? 0} silver`;
+  const worldClock = document.getElementById('tb-world-clock');
+  if (worldClock) worldClock.textContent = getLiveClockText();
 }
 
 function renderCultivatePanel() {
@@ -1276,6 +1309,30 @@ function getVisualTravelPosition(route = getActiveTravelRoute()) {
   };
 }
 
+function getTileEntryDirection(x, y) {
+  const entry = _travelRoute || _lastTileEntry;
+  if (!entry || entry.toX !== x || entry.toY !== y) return null;
+  const dx = x - entry.fromX;
+  const dy = y - entry.fromY;
+  if (dx === 0 && dy === 0) return null;
+  const horiz = dx === 0 ? '' : dx > 0 ? 'west' : 'east';
+  const vert = dy === 0 ? '' : dy > 0 ? 'north' : 'south';
+  return [vert, horiz].filter(Boolean).join('-');
+}
+
+function updateWorldViewToggle() {
+  const shell = document.querySelector('.world-shell');
+  const btn = document.getElementById('btn-toggle-world-view');
+  if (shell) shell.classList.toggle('focus-local', _localViewFocused);
+  if (btn) btn.textContent = _localViewFocused ? 'Show World Map' : 'Focus Local View';
+}
+
+function toggleWorldView() {
+  _localViewFocused = !_localViewFocused;
+  updateWorldViewToggle();
+  renderAll();
+}
+
 function makeLocalSite(tileKey, key, name, glyph, kind, desc, actionHint) {
   return { id: `${tileKey}:${key}`, key, name, glyph, kind, desc, actionHint };
 }
@@ -1449,6 +1506,9 @@ function openWorldService(service, x, y) {
       document.getElementById('open-patron-hall')?.click();
       return;
     case 'cityAffairs':
+      if (tile.cityId) {
+        showTileInfo(tile, x, y, { statusMessage: `Docked at ${titleizeSlug(tile.cityId)}. City affairs are available from this anchor tile.` });
+      }
       doAction('cityAction', { service: tile.cityId || tile.areaId || 'field-affairs' });
       return;
     case 'herbs':
@@ -1523,7 +1583,7 @@ function renderLocalTileMap(tile, x, y) {
   if (!selected) return;
 
   _selectedTileSite = { tileKey, siteId: selected.id };
-  if (summary) summary.textContent = `${getTileAreaProfile(tile).name} · 9 walkable site hooks`;
+  if (summary) summary.textContent = `${getTileAreaProfile(tile).name} · Local exploration map`;
 
   grid.innerHTML = sites.map(site => `
     <button type="button" class="world-local-node kind-${site.kind}${site.id === selected.id ? ' is-active' : ''}" onclick="inspectTileSite('${site.id}', ${x}, ${y})">
@@ -1536,7 +1596,7 @@ function renderLocalTileMap(tile, x, y) {
   detail.innerHTML = `
     <div class="world-site-detail-head">
       <div>
-        <div class="tile-detail-kicker">Local Walk Node</div>
+        <div class="tile-detail-kicker">Local Node</div>
         <h4 class="world-site-detail-title">${escHtml(selected.name)}</h4>
       </div>
       <span class="world-site-detail-glyph">${escHtml(selected.glyph)}</span>
@@ -1944,6 +2004,7 @@ async function moveTile(x, y) {
   _gameState = r.data.state ?? _gameState;
   if (r.data.travelCooldown > 0) {
     _travelReadyAt = Date.now() + r.data.travelCooldown;
+    _lastTileEntry = { regionId: renderedRegionId, fromX, fromY, toX: x, toY: y };
     _travelRoute = {
       regionId: renderedRegionId,
       fromX,
@@ -2015,7 +2076,8 @@ function showTileInfo(tile, x, y, options = {}) {
   const fromTile = travelRoute ? getRegionTile(regionId, travelRoute.fromX, travelRoute.fromY) : null;
   const isTravelTarget = travelRoute && x === travelRoute.toX && y === travelRoute.toY;
   const isTravelOrigin = travelRoute && x === travelRoute.fromX && y === travelRoute.fromY;
-  const statusMessage = options.statusMessage
+  const entryDirection = getTileEntryDirection(x, y);
+  let statusMessage = options.statusMessage
     ?? (isTravelTarget
       ? `Transit engaged from ${fromTile?.name || 'your previous tile'}. You are still crossing this corridor, so pass-by encounters and companion reactions can eventually resolve before arrival.`
       : isTravelOrigin
@@ -2023,8 +2085,11 @@ function showTileInfo(tile, x, y, options = {}) {
         : isPlayer && isTraveling
       ? `Traveling… ${travelSecs}s until the next move window opens.`
       : isPlayer
-        ? 'You are standing here. Inspect the field read, then use highlighted adjacent tiles to keep moving.'
+        ? 'You are standing here. Review live player condition and local tile intel before moving.'
         : 'This tile is within your scouting range. Use it to plan your next step before committing movement.');
+  if (entryDirection && isPlayer && !isTraveling) {
+    statusMessage += ` You entered this tile from the ${entryDirection}.`;
+  }
 
   const chips = [
     `<span class="tag-city">${escHtml(`Coords ${x},${y}`)}</span>`,
@@ -2057,6 +2122,9 @@ function showTileInfo(tile, x, y, options = {}) {
     actionButtons.push(`<button type="button" class="btn-sm btn-ghost" onclick="previewWorldAction('city', ${x}, ${y})">City Hooks</button>`);
   }
 
+  const state = _gameState ?? { hp: 0, hpMax: 0, qi: 0, qiMax: 0, battleQi: 0, battleQiMax: 0 };
+  const liveClockText = getLiveClockText();
+  const playerStatusText = `${state.hp}/${state.hpMax} HP · ${state.qi}/${state.qiMax} Qi · ${state.battleQi}/${state.battleQiMax} BQi`;
   const intelMarkup = intelGroups.map(group => {
     const items = group.items
       .map(item => `<span class="${group.chipClass}">${escHtml(titleizeSlug(item))}</span>`)
@@ -2085,14 +2153,14 @@ function showTileInfo(tile, x, y, options = {}) {
 
       <div class="tile-detail-grid">
         <div class="tile-section-card">
-          <div class="tile-section-label">Area Focus</div>
-          <div class="tile-section-value">${escHtml(area.focusLabel)}</div>
-          <p class="tile-section-copy">${escHtml(area.description)}</p>
+          <div class="tile-section-label">Player Condition</div>
+          <div class="tile-section-value">${escHtml(playerStatusText)}</div>
+          <p class="tile-section-copy">Track your live health and resource readiness before committing to the next move.</p>
         </div>
         <div class="tile-section-card">
-          <div class="tile-section-label">Field Read</div>
-          <div class="tile-section-value">${escHtml(area.typeLabel)}</div>
-          <p class="tile-section-copy">${escHtml(area.summary)}</p>
+          <div class="tile-section-label">Live World Clock</div>
+          <div class="tile-section-value">${escHtml(liveClockText)}</div>
+          <p class="tile-section-copy">This clock helps anchor day/night events, travel phases, and timed service actions.</p>
         </div>
       </div>
 
@@ -2100,7 +2168,6 @@ function showTileInfo(tile, x, y, options = {}) {
 
       ${tile.afkable ? '<div class="tag-afk">⏳ Repeatable field loop marked on this tile</div>' : ''}
       ${actionButtons.length ? `<div class="world-action-row">${actionButtons.join('')}</div>` : ''}
-      ${tile.areaId ? '<div class="tile-detail-footnote">Area intel now falls back to local map metadata instead of collapsing into a dead-end when no dedicated server zone seed exists yet.</div>' : ''}
     </div>
   `;
 
@@ -2162,14 +2229,14 @@ async function openZoneForArea(areaId, x, y) {
     const fallbackCards = getTileIntelGroups(tile).map(group => `
       <div class="node-card node-card-local">
         <div class="node-name">${escHtml(group.label)}</div>
-        <div class="node-meta">Local field read · ${group.items.length} mapped signal(s)</div>
+        <div class="node-meta">Local tile survey · ${group.items.length} mapped signal(s)</div>
         <div class="tile-section-copy">${group.items.map(item => escHtml(titleizeSlug(item))).join(', ')}</div>
       </div>
     `).join('');
 
     bodyHtml += `
       <div class="world-empty-note">
-        This area no longer hard-fails into “no zones found.” It already shows live map intel here, but a dedicated D1 exploration zone still needs to be seeded before full server-driven node farming can happen.
+        This area currently displays local survey metadata while a dedicated exploration zone seed is pending.
       </div>
       ${fallbackCards || '<div class="world-empty-note">No persistent node packages are seeded for this area yet.</div>'}
     `;
@@ -2227,6 +2294,8 @@ function setupExplorePanel() {
   document.getElementById('btn-city-affairs')?.addEventListener('click', () => {
     openWorldService('cityAffairs', _gameState?.tileX ?? 9, _gameState?.tileY ?? 6);
   });
+  document.getElementById('btn-toggle-world-view')?.addEventListener('click', toggleWorldView);
+  updateWorldViewToggle();
 }
 
 async function loadZones() {
