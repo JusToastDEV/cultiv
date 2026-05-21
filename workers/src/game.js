@@ -206,30 +206,43 @@ async function getVisiblePlayersForTile(env, characterId, regionId, tileX, tileY
   const activeAfter = Date.now() - (15 * 60 * 1000);
   const { results } = await env.DB.prepare(
     `SELECT c.id, c.name, c.realm_index, c.stage_index,
-            json_extract(cs.state_json, '$.regionId') AS regionId,
-            CAST(json_extract(cs.state_json, '$.tileX') AS INTEGER) AS tileX,
-            CAST(json_extract(cs.state_json, '$.tileY') AS INTEGER) AS tileY
+            COALESCE(
+              json_extract(cs.state_json, '$.regionId'),
+              json_extract(cs.state_json, '$.region_id')
+            ) AS regionId,
+            CAST(COALESCE(
+              json_extract(cs.state_json, '$.tileX'),
+              json_extract(cs.state_json, '$.tile_x'),
+              json_extract(cs.state_json, '$.x')
+            ) AS INTEGER) AS tileX,
+            CAST(COALESCE(
+              json_extract(cs.state_json, '$.tileY'),
+              json_extract(cs.state_json, '$.tile_y'),
+              json_extract(cs.state_json, '$.y')
+            ) AS INTEGER) AS tileY
      FROM characters c
      JOIN character_state cs ON cs.character_id = c.id
      WHERE c.is_deleted = 0
        AND c.id <> ?1
        AND c.last_active >= ?2
-       AND json_extract(cs.state_json, '$.regionId') = ?3
-       AND ABS(CAST(json_extract(cs.state_json, '$.tileX') AS INTEGER) - ?4) <= 2
-       AND ABS(CAST(json_extract(cs.state_json, '$.tileY') AS INTEGER) - ?5) <= 2
+       AND COALESCE(json_extract(cs.state_json, '$.regionId'), json_extract(cs.state_json, '$.region_id')) = ?3
+       AND ABS(CAST(COALESCE(json_extract(cs.state_json, '$.tileX'), json_extract(cs.state_json, '$.tile_x'), json_extract(cs.state_json, '$.x')) AS INTEGER) - ?4) <= 2
+       AND ABS(CAST(COALESCE(json_extract(cs.state_json, '$.tileY'), json_extract(cs.state_json, '$.tile_y'), json_extract(cs.state_json, '$.y')) AS INTEGER) - ?5) <= 2
      ORDER BY c.last_active DESC
      LIMIT 12`
   ).bind(characterId, activeAfter, regionId, tileX, tileY).all();
 
-  return (results || []).map(player => ({
-    id: player.id,
-    name: player.name,
-    realm_index: player.realm_index,
-    stage_index: player.stage_index,
-    regionId: player.regionId,
-    tileX: Number(player.tileX),
-    tileY: Number(player.tileY)
-  }));
+  return (results || [])
+    .map(player => ({
+      id: player.id,
+      name: player.name,
+      realm_index: player.realm_index,
+      stage_index: player.stage_index,
+      regionId: player.regionId,
+      tileX: Number(player.tileX),
+      tileY: Number(player.tileY)
+    }))
+    .filter(player => Number.isFinite(player.tileX) && Number.isFinite(player.tileY) && typeof player.regionId === 'string' && player.regionId.length > 0);
 }
 
 // ── Game actions ──────────────────────────────────────────────
