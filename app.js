@@ -1457,8 +1457,7 @@ function getRegionTile(regionId, x, y) {
 }
 
 function getRenderedRegionId(state = _gameState) {
-  const regionId = state?.regionId ?? 'ashen-frontier';
-  return regionId === 'ashen-frontier' ? regionId : 'ashen-frontier';
+  return state?.regionId ?? state?.region_id ?? state?.currentRegionId ?? state?.mapRegionId ?? 'ashen-frontier';
 }
 
 function titleizeSlug(value) {
