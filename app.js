@@ -3595,9 +3595,12 @@ function hashString(value) {
   return Math.abs(hash);
 }
 
-function getLocalVisitorPositions(mapData, anchorX, anchorY, players) {
+function getLocalVisitorPositions(mapData, players) {
   const positions = new Map();
-  if (!players.length) return positions;
+  if (!players.length || !mapData) return positions;
+
+  const centerX = Math.floor(mapData.width / 2);
+  const centerY = Math.floor(mapData.height / 2);
 
   const candidateOffsets = [
     { x: 1, y: 0 },
@@ -3611,14 +3614,18 @@ function getLocalVisitorPositions(mapData, anchorX, anchorY, players) {
     { x: 2, y: 0 },
     { x: -2, y: 0 },
     { x: 0, y: 2 },
-    { x: 0, y: -2 }
+    { x: 0, y: -2 },
+    { x: 2, y: 2 },
+    { x: -2, y: 2 },
+    { x: 2, y: -2 },
+    { x: -2, y: -2 }
   ];
 
   const candidateSlots = candidateOffsets
-    .map(offset => ({ x: anchorX + offset.x, y: anchorY + offset.y }))
+    .map(offset => ({ x: centerX + offset.x, y: centerY + offset.y }))
     .filter(slot => {
       const subtile = getLocalMapTile(mapData, slot.x, slot.y);
-      return subtile && subtile.terrain !== '#' && !(slot.x === anchorX && slot.y === anchorY);
+      return subtile && subtile.terrain !== '#';
     });
 
   players.slice(0, candidateSlots.length).forEach((player, index) => {
@@ -3804,7 +3811,7 @@ function renderLocalMapView(grid, wrap, TILE_SIZE) {
   const tiles = _localMapData.tiles;
   const worldTile = getRegionTile(_localViewTile.regionId, _localViewTile.x, _localViewTile.y);
   const localVisitors = getVisiblePlayers().filter(player => player.regionId === _localViewTile.regionId && player.tileX === _localViewTile.x && player.tileY === _localViewTile.y);
-  const visitorPositions = getLocalVisitorPositions(_localMapData, _localPlayerX, _localPlayerY, localVisitors);
+  const visitorPositions = getLocalVisitorPositions(_localMapData, localVisitors);
   const canMoveNow = _localMovementReadyAt <= Date.now();
   
   grid.innerHTML = '';
