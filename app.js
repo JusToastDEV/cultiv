@@ -1453,7 +1453,32 @@ function getAfTile(x, y) {
 
 function getRegionTile(regionId, x, y) {
   if (regionId === 'ashen-frontier') return getAfTile(x, y);
-  return { t:'M' }; // other regions fully fogged for now
+
+  // Fallback procedural tile profile for non-Ashen regions that still appear in live saves.
+  // This keeps the map readable and interactive instead of collapsing into all-mountain placeholders.
+  const seed = hashString(`${regionId}:${x}:${y}`);
+  const roll = seed % 100;
+  let t = '.';
+  if (roll < 8) t = 'F';
+  else if (roll < 14) t = 'H';
+  else if (roll < 22) t = 'W';
+  else if (roll < 28) t = 'V';
+  else if (roll < 34) t = 'K';
+  else if (roll < 38) t = 'X';
+
+  const hazard = Math.max(0, Math.min(4, Math.floor((seed % 11) / 3)));
+  const spiritDensity = t === 'V' ? 2 : t === 'H' ? 1 : 0;
+  const tile = {
+    t,
+    name: `${titleizeSlug(regionId)} Frontier`,
+    hazard,
+    spiritDensity,
+    herbs: t === 'H' || t === 'F' ? ['wildherb'] : [],
+    ores: t === 'K' ? ['iron-ore'] : [],
+    mobs: t === 'W' || t === 'F' ? ['wild-beast'] : [],
+    drops: t === 'X' ? ['ancient-fragment'] : []
+  };
+  return tile;
 }
 
 function getRenderedRegionId(state = _gameState) {
