@@ -2489,8 +2489,34 @@ button.btn-locked {
   gap:.8rem;
   align-items:start;
 }
+.world-quest-column {
+  display:flex;
+  flex-direction:column;
+  gap:.75rem;
+}
+.world-quest-section {
+  border:1px solid rgba(201,162,50,.12);
+  border-radius:8px;
+  background:rgba(255,255,255,.02);
+  padding:.75rem;
+}
+.world-quest-section-title {
+  margin:0 0 .55rem;
+  font-size:.82rem;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--ink-2);
+}
 .world-quest-surface .quest-list {
   margin:0;
+}
+.world-empty-quest {
+  display:block;
+  padding:.55rem .7rem;
+  color:var(--ink-2);
+  border:1px dashed rgba(201,162,50,.14);
+  border-radius:8px;
+  background:rgba(255,255,255,.02);
 }
 .world-quest-detail {
   margin-top:0;

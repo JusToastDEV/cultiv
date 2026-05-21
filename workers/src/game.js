@@ -244,8 +244,10 @@ export async function handleGameAction(request, env, account) {
   const { action, options } = body;
   if (!action) return json({ error: 'action is required' }, 400, request);
 
+  const isBattleStart = action === 'battleAction' && (options?.action ?? '') === 'start';
+
   // Check cooldown for this specific action
-  if (COOLDOWNS[action] !== undefined) {
+  if (COOLDOWNS[action] !== undefined && (action !== 'battleAction' || isBattleStart)) {
     const remaining = await getCooldownRemaining(env, character.id, action);
     if (remaining > 0) {
       return json({ error: 'Action on cooldown', cooldown_ms: remaining, ready_at: Date.now() + remaining }, 429, request);
@@ -340,7 +342,7 @@ export async function handleGameAction(request, env, account) {
     ).bind(result.state.realmIndex ?? 0, result.state.stageIndex ?? 0, Date.now(), character.id).run();
   }
 
-  if (COOLDOWNS[action]) {
+  if (COOLDOWNS[action] && !result.skipActionCooldown) {
     await setCooldown(env, character.id, action, COOLDOWNS[action]);
   }
 
@@ -692,11 +694,154 @@ function actionCityAction(state, character, options) {
 }
 
 
+function getBattleEnemyProfile(enemyId, enemyName, danger, state) {
+  const baseDanger = Math.max(1, Number(danger) || 1);
+  const realmScale = Number(state.realmIndex ?? 0) * 6;
+  const stageScale = Number(state.stageIndex ?? 0) * 3;
+  const threatScale = baseDanger * 10 + realmScale + stageScale;
+  const hpMax = 50 + threatScale * 2;
+  const qiMax = 20 + baseDanger * 8;
+  const attack = 8 + baseDanger * 3 + Math.max(0, Math.floor(realmScale / 3));
+  const defense = 2 + baseDanger;
+  return {
+    enemyId: enemyId || 'rogue-beast',
+    enemyName: enemyName || 'Rogue Beast',
+    enemyHp: hpMax,
+    enemyHpMax: hpMax,
+    enemyQi: qiMax,
+    enemyQiMax: qiMax,
+    enemyAttack: attack,
+    enemyDefense: defense,
+    round: 1,
+    defending: false,
+    danger: baseDanger,
+    source: 'field'
+  };
+}
+
+function rollBattleDamage(minimum, maximum) {
+  const floor = Math.max(0, Math.floor(minimum));
+  const ceil = Math.max(floor, Math.floor(maximum));
+  return floor + Math.floor(Math.random() * (ceil - floor + 1));
+}
+
+function finishBattle(state, battle, outcome, extraLog = []) {
+  const nextState = { ...state };
+  delete nextState.battle;
+
+  if (outcome === 'victory') {
+    const silverGain = 10 + battle.danger * 6;
+    const soulXpGain = 6 + battle.danger * 4;
+    const bodyXpGain = 4 + battle.danger * 3;
+    nextState.silver = (nextState.silver ?? 0) + silverGain;
+    nextState.soulXp = (nextState.soulXp ?? 0) + soulXpGain;
+    nextState.bodyXp = (nextState.bodyXp ?? 0) + bodyXpGain;
+    nextState.battleQi = Math.min(nextState.battleQiMax ?? 0, (nextState.battleQi ?? 0) + 8 + battle.danger * 2);
+    return {
+      state: nextState,
+      log: [
+        ...extraLog,
+        `${battle.enemyName} is defeated.`,
+        `You gain ${silverGain} silver, ${bodyXpGain} body XP, and ${soulXpGain} soul XP.`
+      ]
+    };
+  }
+
+  if (outcome === 'defeat') {
+    nextState.hp = Math.max(1, Math.floor((nextState.hpMax ?? nextState.hp ?? 1) * 0.25));
+    nextState.qi = Math.max(0, Math.floor((nextState.qi ?? 0) * 0.5));
+    nextState.battleQi = Math.max(0, Math.floor((nextState.battleQi ?? 0) * 0.5));
+    return {
+      state: nextState,
+      log: [...extraLog, `You are overwhelmed by ${battle.enemyName} and barely escape with your life.`]
+    };
+  }
+
+  return {
+    state: nextState,
+    log: [...extraLog, `You break away from ${battle.enemyName} and leave the fight behind.`]
+  };
+}
+
 function actionBattle(state, character, options) {
-  const { action: battleAct, enemyId } = options ?? {};
+  const { action: battleAct, enemyId, enemyName, danger, source } = options ?? {};
   if (!battleAct) return { error: 'action required in options for battle' };
-  // Full battle engine will be ported from main.js in the next phase
-  return { state, log: [`Battle action "${battleAct}" against ${enemyId} — full engine pending.`] };
+
+  if (battleAct === 'start') {
+    if (state.battle) return { error: 'A battle is already active.' };
+    const battle = getBattleEnemyProfile(enemyId, enemyName, danger, state);
+    battle.source = source || 'field';
+    return {
+      state: { ...state, battle },
+      log: [`${battle.enemyName} steps forward. The fight begins.`]
+    };
+  }
+
+  const battle = state.battle;
+  if (!battle) return { error: 'No active battle.' };
+
+  if (battleAct === 'battleFlee') {
+    const fleeChance = 0.45 + Math.min(0.35, (state.battleQi ?? 0) / Math.max(80, (state.battleQiMax ?? 80) * 2));
+    if (Math.random() <= fleeChance) {
+      return { ...finishBattle(state, battle, 'flee', ['You find an opening and disengage.']), skipActionCooldown: true };
+    }
+
+    const fleeHit = Math.max(1, battle.enemyAttack - 1 + rollBattleDamage(0, battle.danger + 2));
+    const nextHp = Math.max(0, (state.hp ?? 0) - fleeHit);
+    if (nextHp <= 0) {
+      return { ...finishBattle({ ...state, hp: 0 }, battle, 'defeat', [`Your retreat fails and ${battle.enemyName} cuts you down for ${fleeHit} damage.`]), skipActionCooldown: true };
+    }
+
+    return {
+      state: { ...state, hp: nextHp, battle: { ...battle, round: (battle.round ?? 1) + 1, defending: false } },
+      log: [`You fail to disengage. ${battle.enemyName} strikes you for ${fleeHit} damage as you fall back.`],
+      skipActionCooldown: true
+    };
+  }
+
+  const playerAttack = 10 + Number(state.realmIndex ?? 0) * 3 + Number(state.stageIndex ?? 0) * 2 + Math.floor((state.bodyXp ?? 0) / 12);
+  const playerDefense = 3 + Number(state.realmIndex ?? 0) + Math.floor((state.soulXp ?? 0) / 20);
+  const playerQi = Math.max(0, state.qi ?? 0);
+  const playerBattleQi = Math.max(0, state.battleQi ?? 0);
+  const battleQiMax = Math.max(1, state.battleQiMax ?? 1);
+  const log = [];
+  let nextState = { ...state };
+  let nextBattle = { ...battle, defending: battleAct === 'battleDefend' };
+
+  if (battleAct === 'battleAttack') {
+    const qiBurst = playerQi >= 8 ? 4 : 0;
+    const battleBurst = playerBattleQi >= 6 ? 3 : 0;
+    const attackDamage = Math.max(2, playerAttack + qiBurst + battleBurst + rollBattleDamage(0, 6) - battle.enemyDefense);
+    nextBattle.enemyHp = Math.max(0, battle.enemyHp - attackDamage);
+    nextState.qi = Math.max(0, playerQi - (qiBurst ? 5 : 2));
+    nextState.battleQi = Math.min(battleQiMax, Math.max(0, playerBattleQi - (battleBurst ? 4 : 0)) + 3);
+    log.push(`You strike ${battle.enemyName} for ${attackDamage} damage.`);
+    if (nextBattle.enemyHp <= 0) {
+      return { ...finishBattle(nextState, nextBattle, 'victory', log), skipActionCooldown: true };
+    }
+  } else if (battleAct === 'battleDefend') {
+    nextState.qi = Math.min(state.qiMax ?? playerQi, playerQi + 4);
+    nextState.battleQi = Math.min(battleQiMax, playerBattleQi + 5);
+    log.push('You settle into a guarded stance and gather your breath.');
+  } else {
+    return { error: `Unknown battle action: ${battleAct}` };
+  }
+
+  const enemyBurst = nextBattle.enemyQi >= 8 ? 3 : 0;
+  const rawEnemyDamage = Math.max(1, nextBattle.enemyAttack + enemyBurst + rollBattleDamage(0, 5) - playerDefense);
+  const mitigatedDamage = nextBattle.defending ? Math.max(1, Math.floor(rawEnemyDamage * 0.45)) : rawEnemyDamage;
+  nextBattle.enemyQi = Math.max(0, nextBattle.enemyQi - (enemyBurst ? 6 : 0)) + 2;
+  nextState.hp = Math.max(0, (nextState.hp ?? 0) - mitigatedDamage);
+  nextState.battleQi = Math.min(battleQiMax, (nextState.battleQi ?? 0) + 2);
+  log.push(`${nextBattle.enemyName} hits you for ${mitigatedDamage} damage.`);
+
+  if (nextState.hp <= 0) {
+    return { ...finishBattle(nextState, nextBattle, 'defeat', log), skipActionCooldown: true };
+  }
+
+  nextBattle.round = (battle.round ?? 1) + 1;
+  nextState.battle = nextBattle;
+  return { state: nextState, log, skipActionCooldown: true };
 }
 
 // ── Crafting resolution ───────────────────────────────────────

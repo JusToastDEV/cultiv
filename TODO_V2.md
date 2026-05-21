@@ -1,7 +1,7 @@
 # Sealed Heavens V2 — Master Development TODO
 
 **Status:** Active  
-**Last Updated:** May 2026  
+**Last Updated:** May 2026 (active gameplay/quest/battle pass)  
 **Guiding Doc:** INSTRUCTIONS.md + VISION_V2.md  
 **Priority Scale:** P0 = game-breaking / P1 = launch-critical / P2 = important / P3 = polish / P4 = future
 
@@ -89,7 +89,7 @@ Cities should feel like places, not menu buttons.
 - [ ] **Weapon forge** — Buy/sell weapons and armor. Blacksmith NPC who can upgrade equipment if you bring materials.
 - [ ] **Sect Registration Hall** — Join sects here. Check faction standings. Talk to sect recruiters (named NPCs).
 - [ ] **Tavern / Inn** — Pick up rumors (trigger quests). Pay for rest (temporary HP/Qi regen bonus). Talk to traveling NPCs for rare quest hooks.
-- [ ] **City NPC placement** — Named NPCs from the simulation roam the city. When you share a city district with a rival NPC, they appear as an encounter option. You can challenge, ignore, or pay tribute.
+- [~] **City NPC placement** — In progress: starter Ashgate wards no longer all inherit the same city-core NPC layer, so repeated NPC bleed-through across every local location has been reduced. Still needed: simulation-driven district placement, rival roaming, and persistent encounter ownership.
 - [ ] **City law enforcement** — Law-level cities detect wanted cultivators. High-law = city guards attack if your reputation is low enough. Black market districts only accessible with sufficient city infamy or jianghu standing.
 - [ ] **Traveling between cities** — Travel costs time (delta based on distance, qinggong, terrain). Road tiles have encounter chances. Miasma/cold/gravity hazard zones gate travel by body cultivation tier.
 
@@ -107,7 +107,7 @@ The world must be walkable, not a dropdown.
 - [ ] **Zone entry / lazy resolution** — On entering a zone tile: server resolves Δt since last visit, spawns appropriate resources, advances NPC states for that zone. No cron loops. Pure event-driven.
 - [ ] **Encounter system** — Moving through wilderness tiles has a % chance to trigger an encounter: random beast, traveling merchant, ambush, or natural phenomenon. Chance scales with danger_level.
 - [~] **Resource nodes on tiles** — Spirit herb nodes, ore veins, and beast lairs tied to specific tiles. Have respawn timers. When a player arrives at a tile with a resource node, show it as an interactive element. Harvesting depletes it for that player for the respawn window. Current pass: first real tile field actions are live from the World inspector and local site nodes for the occupied tile, using per-tile personal cooldowns and seeded D1 items while full authoritative `map_tiles` content still needs to land.
-- [~] **Tile interior exploration** — In progress: each selected tile now exposes a local 3×3 site layout as the first step toward actually walking around a tile after arrival, and the occupied tile can now launch provisional forage/mine/hunt/resonate/scavenge loops. What is still missing is persistent per-site geography, richer encounter resolution, and authoritative map-backed content instead of client-authored fallback metadata.
+- [~] **Tile interior exploration** — In progress: each selected tile now exposes a local 3×3 site layout as the first step toward actually walking around a tile after arrival, the occupied tile can now launch provisional forage/mine/hunt/resonate/scavenge loops, and the early Ashgate 3x3 has been split into distinct interlocked starter wards instead of repeating one city-core layout. What is still missing is persistent per-site geography, richer encounter resolution, and authoritative map-backed content instead of client-authored fallback metadata.
 - [ ] **Sect territory tiles** — Sects claim tiles around their compound. Entering enemy territory without standing triggers a warning and possible guard NPC encounter.
 - [ ] **Fog of war** — New characters start with only their starting city tile and immediate roads visible. Exploration reveals adjacent tiles. Scouted tiles (visited) are always visible. Unvisited tiles in known regions show terrain type but not resource detail.
 - [ ] **Multi-character party** — Party members share a tile. Party members can assist in battles (contribution system). Party formed in same city, disbanded any time.
@@ -219,14 +219,14 @@ Sect building is a midgame feature after Foundation Establishment minimum.
 
 Battle needs to feel weighty, not trivial.
 
-- [ ] **Battle length** — Current battles are too short. Standard encounter: 8–15 rounds. Boss/named NPC: 20–30 rounds. Each round presents 4 choices: Attack / Technique / Defend / Item. Round timer: 30 seconds (can be disabled in settings for turn-based feel).
+- [~] **Battle length** — In progress: the live worker now holds a server-side start/attack/defend/flee loop so local mob fights and duel hooks can actually resolve. Still needed: longer encounter pacing, technique/item turns, broader enemy variety, and better round texture.
 - [ ] **Technique clash system** — Each technique has an elemental type and a clash matrix. Fire vs. Water = 0.6x damage multiplier. Earth vs. Lightning = 1.4x. This creates strategic depth in technique selection.
 - [ ] **Status effects in battle** — Bleeding (lose HP per round), Burning (Qi drain per round), Petrify (miss next action), Confused (50% chance to attack ally/self), Rooted (can't flee). Enemies apply these. Player applies them via techniques.
-- [ ] **Battle flee penalty** — Fleeing from a battle with an NPC you've wronged costs reputation. Fleeing from a boss leaves a "cowardice" debuff (-10% all stats for 1 hour).
+- [~] **Battle flee penalty** — In progress: flee is now a real resolved action inside the worker battle loop instead of a placeholder. Still needed: reputation loss, boss cowardice debuff, and source-aware penalties.
 - [ ] **Battle loot overhaul** — Beast drops use a tier-based loot table with quality rolls. Named NPC drops always include their signature item. Boss drops include a guaranteed rare item + chance of technique scroll.
 - [ ] **PvP system** — Players can challenge each other to duels in cities with an arena. Duels are asynchronous: challenger submits their action sequence, defender is notified and submits theirs, server resolves the full battle and sends result. No real-time required.
 - [ ] **Multi-enemy encounters** — Parties of beasts/bandits. Each enemy acts independently. Player can target specific enemies. Companions each take a turn per round.
-- [ ] **Battle state persistence** — Battle state stored server-side in `character_state.battle_json`. Any tab that loads the character state sees the current battle. BroadcastChannel used client-side to sync UI without double-resolving.
+- [~] **Battle state persistence** — In progress: battle state now lives in server-backed character state and survives client renders, which unblocks contextual local combat and duel starts. Still needed: dedicated storage shape cleanup and BroadcastChannel sync to prevent cross-tab drift.
 - [ ] **Technique combo system** — Using the same technique 3 rounds in a row triggers a "technique overdrive" variant with doubled effect but half the battle Qi cost. Builds towards skill mastery.
 - [ ] **Formation arrays in battle** — Players with formation literacy can deploy a 1-use formation flag at start of battle: defensive array (reduce incoming damage), offensive array (add area damage), trapping array (root enemy for 3 rounds).
 
@@ -276,7 +276,7 @@ Breakthroughs should feel epic, not transactional.
 
 Quests should be found, not listed.
 
-- [ ] **Emergent quest triggers** — Quests are seeded by: NPC state (their need exists in the simulation), world events (a beast den near a city creates a hunt quest), player exploration (finding a ruin activates a mystery chain), city NPC dialogue (rumors lead to quests).
+- [~] **Emergent quest triggers** — In progress: local city dialogue, rumor hooks, duel challenges, and service interactions now feed a modular Assigned vs Available quest surface instead of dumping a static area list. Still needed: server-authored quest seeding from NPC simulation, world events, and exploration discoveries.
 - [ ] **Quest discovery system** — On talking to an NPC, server checks: does this NPC have any quest for this player based on their reputation, sect, realm, and items? If yes, NPC dialogue includes a hook. No separate quest log entry appears until the player accepts it.
 - [ ] **Quest log** — Minimal: a list of accepted active quests with their most recent update text. No map markers. No upfront list of "starter goals." Players build their own reference. This is part of the guide culture.
 - [ ] **Quest types**:

@@ -73,6 +73,7 @@ let _worldSupportTab = 'local';
 let _worldQuestSurfaceLeads = [];
 let _selectedWorldQuestEntryId = null;
 let _renderedWorldQuestEntries = [];
+let _assignedWorldQuestEntries = [];
 
 // Realm names for display
 const REALM_NAMES = [
@@ -105,6 +106,7 @@ window.addEventListener('DOMContentLoaded', () => {
   setupNavigation();
   setupSidebarToggle();
   setupTopbarActions();
+  setupBattlePanel();
   setupCultivatePanel();
   setupAdminPanel();
   setupExplorePanel();
@@ -523,6 +525,7 @@ async function signOut() {
     _worldQuestSurfaceLeads = [];
     _selectedWorldQuestEntryId = null;
     _renderedWorldQuestEntries = [];
+    _assignedWorldQuestEntries = [];
     window._activeCharId = null;
     updateTopbarLogoutLabel();
     showScreen('auth');
@@ -534,6 +537,7 @@ async function signOut() {
   _worldQuestSurfaceLeads = [];
   _selectedWorldQuestEntryId = null;
   _renderedWorldQuestEntries = [];
+  _assignedWorldQuestEntries = [];
   window._activeCharId = null;
   stopPolling();
   stopGuestSync();
@@ -594,6 +598,141 @@ function setupTopbarActions() {
   if (closeMap) closeMap.addEventListener('click', () => document.getElementById('map-modal')?.classList.add('hidden'));
 }
 
+function setupBattlePanel() {
+  document.getElementById('open-battle')?.addEventListener('click', () => {
+    if (!_gameState?.battle) {
+      showToast('No active battle.', 'warn');
+      return;
+    }
+    openBattleModal();
+  });
+  document.getElementById('close-battle')?.addEventListener('click', closeBattleModal);
+  document.querySelectorAll('#battle-modal [data-action]').forEach(button => {
+    button.addEventListener('click', () => doBattleAction(button.dataset.action || 'battleAttack'));
+  });
+}
+
+function openBattleModal() {
+  const modal = document.getElementById('battle-modal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+  modal.setAttribute('aria-hidden', 'false');
+}
+
+function closeBattleModal() {
+  const modal = document.getElementById('battle-modal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  modal.setAttribute('aria-hidden', 'true');
+}
+
+function renderBattleModal() {
+  const status = document.getElementById('battle-modal-status');
+  const playerName = document.getElementById('bm-player-name');
+  const playerHp = document.getElementById('bm-player-hp');
+  const playerHpBar = document.getElementById('bm-player-hp-bar');
+  const playerQi = document.getElementById('bm-player-qi');
+  const playerQiBar = document.getElementById('bm-player-qi-bar');
+  const playerBqi = document.getElementById('bm-player-bqi');
+  const playerBqiBar = document.getElementById('bm-player-bqi-bar');
+  const enemyName = document.getElementById('bm-enemy-name');
+  const enemyHp = document.getElementById('bm-enemy-hp');
+  const enemyHpBar = document.getElementById('bm-enemy-hp-bar');
+  const enemyQi = document.getElementById('bm-enemy-qi');
+  const enemyQiBar = document.getElementById('bm-enemy-qi-bar');
+  const techList = document.getElementById('battle-tech-list');
+  const battle = _gameState?.battle || null;
+  const state = _gameState || { hp: 0, hpMax: 1, qi: 0, qiMax: 1, battleQi: 0, battleQiMax: 1 };
+
+  if (playerName) playerName.textContent = _character?.name || 'Cultivator';
+  if (playerHp) playerHp.textContent = `${state.hp ?? 0} / ${state.hpMax ?? 0}`;
+  if (playerHpBar) playerHpBar.style.width = `${Math.max(0, Math.round(((state.hp ?? 0) / Math.max(1, state.hpMax ?? 1)) * 100))}%`;
+  if (playerQi) playerQi.textContent = `${state.qi ?? 0} / ${state.qiMax ?? 0}`;
+  if (playerQiBar) playerQiBar.style.width = `${Math.max(0, Math.round(((state.qi ?? 0) / Math.max(1, state.qiMax ?? 1)) * 100))}%`;
+  if (playerBqi) playerBqi.textContent = `${state.battleQi ?? 0} / ${state.battleQiMax ?? 0}`;
+  if (playerBqiBar) playerBqiBar.style.width = `${Math.max(0, Math.round(((state.battleQi ?? 0) / Math.max(1, state.battleQiMax ?? 1)) * 100))}%`;
+
+  if (!battle) {
+    if (status) status.textContent = 'No active battle.';
+    if (enemyName) enemyName.textContent = '—';
+    if (enemyHp) enemyHp.textContent = '—';
+    if (enemyHpBar) enemyHpBar.style.width = '0%';
+    if (enemyQi) enemyQi.textContent = '—';
+    if (enemyQiBar) enemyQiBar.style.width = '0%';
+    if (techList) techList.innerHTML = '<span class="tech-unknown">No battle arts wired into the live worker yet.</span>';
+    document.querySelectorAll('#battle-modal [data-action]').forEach(button => {
+      button.disabled = true;
+    });
+    return;
+  }
+
+  if (status) status.textContent = `${battle.enemyName} — Round ${battle.round}${battle.defending ? ' | Defending' : ''}`;
+  if (enemyName) enemyName.textContent = battle.enemyName || 'Enemy';
+  if (enemyHp) enemyHp.textContent = `${Math.max(0, battle.enemyHp ?? 0)} / ${battle.enemyHpMax ?? 0}`;
+  if (enemyHpBar) enemyHpBar.style.width = `${Math.max(0, Math.round(((battle.enemyHp ?? 0) / Math.max(1, battle.enemyHpMax ?? 1)) * 100))}%`;
+  if (enemyQi) enemyQi.textContent = `${Math.max(0, battle.enemyQi ?? 0)} / ${battle.enemyQiMax ?? 0}`;
+  if (enemyQiBar) enemyQiBar.style.width = `${Math.max(0, Math.round(((battle.enemyQi ?? 0) / Math.max(1, battle.enemyQiMax ?? 1)) * 100))}%`;
+  if (techList) {
+    techList.innerHTML = '<span class="tech-unknown">Techniques are still pending the live battle-art pass. Attack, defend, and flee are active now.</span>';
+  }
+  document.querySelectorAll('#battle-modal [data-action]').forEach(button => {
+    button.disabled = false;
+  });
+}
+
+async function doBattleAction(action, options = {}) {
+  if (_guestMode || !_character) return;
+  const r = await API.post('/api/game/action', {
+    action: 'battleAction',
+    options: { action, ...options }
+  });
+  if (!r.ok) {
+    showToast(r.data.error || 'Battle action failed.', 'warn');
+    return;
+  }
+
+  _gameState = r.data.state ?? _gameState;
+  _cooldowns = r.data.cooldowns ?? _cooldowns;
+  renderAll();
+  appendToLog((r.data.result || []).join(' '));
+  showToast((r.data.result || ['Battle action resolved.']).slice(-1)[0], 'ok');
+  if (_gameState?.battle) {
+    openBattleModal();
+  } else {
+    closeBattleModal();
+  }
+}
+
+async function startLocalBattle(enemyId, enemyName, options = {}) {
+  if (_guestMode || !_character) return;
+  const regionId = _viewMode === 'local' && _localViewTile ? _localViewTile.regionId : getRenderedRegionId(_gameState);
+  const worldX = _viewMode === 'local' && _localViewTile ? _localViewTile.x : (_gameState?.tileX ?? 9);
+  const worldY = _viewMode === 'local' && _localViewTile ? _localViewTile.y : (_gameState?.tileY ?? 6);
+  const tile = getRegionTile(regionId, worldX, worldY);
+  const subtile = _viewMode === 'local' ? getLocalPlayerTile() : null;
+  const r = await API.post('/api/game/action', {
+    action: 'battleAction',
+    options: {
+      action: 'start',
+      enemyId,
+      enemyName,
+      danger: Math.max(tile?.hazard ?? 0, subtile?.mobs?.length ? 1 : 0, options.danger ?? 0),
+      source: options.source || (subtile?.service === 'duel' ? 'duel' : 'field')
+    }
+  });
+  if (!r.ok) {
+    showToast(r.data.error || 'Could not start battle.', 'warn');
+    return;
+  }
+
+  _gameState = r.data.state ?? _gameState;
+  _cooldowns = r.data.cooldowns ?? _cooldowns;
+  renderAll();
+  appendToLog((r.data.result || []).join(' '));
+  openBattleModal();
+  showToast(`Battle started: ${enemyName}.`, 'warn');
+}
+
 // ── Polling ────────────────────────────────────────────────────
 function startPolling() {
   if (_pollTimer) clearInterval(_pollTimer);
@@ -642,6 +781,7 @@ function renderAll() {
   if (!_gameState || !_character) return;
   renderTopBar();
   renderCultivatePanel();
+  renderBattleModal();
   if (document.getElementById('panel-explore')?.classList.contains('active')) renderTileMap();
 }
 
@@ -1899,6 +2039,10 @@ function slugifySurfaceKey(value) {
     .replace(/^-+|-+$/g, '') || 'entry';
 }
 
+function getTileSettlementId(tile) {
+  return tile?.settlementId || tile?.cityId || null;
+}
+
 function getSelectedWorldSupportTile() {
   const regionId = _selectedWorldTile?.regionId ?? getRenderedRegionId(_gameState);
   const x = _selectedWorldTile?.x ?? (_gameState?.tileX ?? 9);
@@ -1938,6 +2082,38 @@ function selectWorldQuestEntry(entryId) {
   rerenderWorldSupportSurface();
 }
 
+function assignWorldQuestEntry(entryId) {
+  const entry = _renderedWorldQuestEntries.find(item => item.id === entryId);
+  if (!entry) return;
+  const assigned = {
+    id: entry.id,
+    title: entry.title,
+    badgeLabel: entry.badgeLabel,
+    rarity: entry.rarity,
+    meta: entry.meta,
+    detail: entry.detail,
+    sense: entry.sense || '',
+    actionLabel: entry.actionLabel || '',
+    actionKind: entry.actionKind || 'ghost',
+    action: entry.action || null,
+    assignedAt: Date.now()
+  };
+  _assignedWorldQuestEntries = [
+    assigned,
+    ..._assignedWorldQuestEntries.filter(item => item.id !== assigned.id)
+  ].slice(0, 12);
+  _selectedWorldQuestEntryId = assigned.id;
+  setWorldSupportTab('quests');
+}
+
+function unassignWorldQuestEntry(entryId) {
+  _assignedWorldQuestEntries = _assignedWorldQuestEntries.filter(item => item.id !== entryId);
+  if (_selectedWorldQuestEntryId === entryId) {
+    _selectedWorldQuestEntryId = _assignedWorldQuestEntries[0]?.id || null;
+  }
+  rerenderWorldSupportSurface();
+}
+
 function activateWorldQuestEntry(entryId) {
   const entry = _renderedWorldQuestEntries.find(item => item.id === entryId);
   if (entry?.action && typeof entry.action.run === 'function') {
@@ -1947,7 +2123,7 @@ function activateWorldQuestEntry(entryId) {
 
 function buildWorldQuestEntries(currentTile, selectedTile, x, y) {
   const selectedArea = getTileAreaProfile(selectedTile);
-  const isAshgate = (selectedTile.cityId || currentTile.cityId) === 'ashgate';
+  const isAshgate = (getTileSettlementId(selectedTile) || getTileSettlementId(currentTile)) === 'ashgate';
   const isLocalActive = _viewMode === 'local'
     && _localMapData
     && _localViewTile
@@ -2296,6 +2472,13 @@ function handleLocalCityAction(actionKey, x, y) {
             }
           })
         },
+        {
+          label: 'Challenge Jian now',
+          detail: 'Start a live duel from the ring itself.',
+          kind: 'primary',
+          closeOnSelect: false,
+          run: () => startLocalBattle('showoff-jian', 'Showoff Jian', { source: 'duel', danger: 1 })
+        },
         { label: 'Back to district', detail: 'Ignore the ring for now.', kind: 'ghost', run: () => {} }
       ]
     },
@@ -2450,6 +2633,9 @@ function renderLocalInspector(tile, x, y) {
 
     if (action) {
       actionButtons.push(`<button type="button" class="btn-sm btn-ghost" onclick="performTileFieldAction('${action}', ${x}, ${y})">Work This Node</button>`);
+    }
+    if (subtile?.mobs?.length) {
+      actionButtons.push(`<button type="button" class="btn-sm btn-primary" onclick="startLocalBattle('${subtile.mobs[0]}', '${escHtml(titleizeSlug(subtile.mobs[0]))}', { source: 'field', danger: 1 })">Engage Hostiles</button>`);
     }
     if (subtile?.service) {
       const label = subtile.npcName
@@ -2955,20 +3141,39 @@ function renderLocalTileMap(tile, x, y) {
 }
 
 function renderWorldQuestBoard(currentTile, selectedTile) {
+  const assignedList = document.getElementById('assigned-events-list');
   const list = document.getElementById('available-events-list');
   const detail = document.getElementById('world-quest-detail');
-  if (!list || !detail) return;
+  if (!list || !detail || !assignedList) return;
 
   const x = _selectedWorldTile?.x ?? (_gameState?.tileX ?? 9);
   const y = _selectedWorldTile?.y ?? (_gameState?.tileY ?? 6);
   const entries = buildWorldQuestEntries(currentTile, selectedTile, x, y);
   _renderedWorldQuestEntries = entries;
+  const assignedIds = new Set(_assignedWorldQuestEntries.map(entry => entry.id));
+  const assignedEntries = _assignedWorldQuestEntries
+    .map(assigned => entries.find(entry => entry.id === assigned.id) || assigned)
+    .filter(Boolean);
+  const availableEntries = entries.filter(entry => !assignedIds.has(entry.id));
 
-  if (!entries.find(entry => entry.id === _selectedWorldQuestEntryId)) {
-    _selectedWorldQuestEntryId = entries[0]?.id || null;
+  const allEntries = [...assignedEntries, ...availableEntries];
+  if (!allEntries.find(entry => entry.id === _selectedWorldQuestEntryId)) {
+    _selectedWorldQuestEntryId = assignedEntries[0]?.id || availableEntries[0]?.id || null;
   }
 
-  list.innerHTML = entries.map(entry => `
+  assignedList.innerHTML = assignedEntries.length ? assignedEntries.map(entry => `
+    <li class="world-quest-item is-selectable${entry.id === _selectedWorldQuestEntryId ? ' is-active' : ''}" data-world-quest-id="${escHtml(entry.id)}">
+      <div style="flex:1">
+        <div class="quest-line-title">
+          <span>${escHtml(entry.title)}</span>
+          <span class="quest-badge ${escHtml(entry.rarity || 'common')}">${escHtml(entry.badgeLabel || 'active')}</span>
+        </div>
+        <div class="quest-line-meta">${escHtml(entry.meta || 'Assigned objective.')}</div>
+      </div>
+    </li>
+  `).join('') : '<li class="world-empty-quest">No assigned quests yet. Select a contract or local lead to pin it here.</li>';
+
+  list.innerHTML = availableEntries.map(entry => `
     <li class="world-quest-item is-selectable${entry.id === _selectedWorldQuestEntryId ? ' is-active' : ''}" data-world-quest-id="${escHtml(entry.id)}">
       <div style="flex:1">
         <div class="quest-line-title">
@@ -2981,15 +3186,17 @@ function renderWorldQuestBoard(currentTile, selectedTile) {
     </li>
   `).join('');
 
-  list.querySelectorAll('[data-world-quest-id]').forEach(node => {
+  document.querySelectorAll('[data-world-quest-id]').forEach(node => {
     node.addEventListener('click', () => selectWorldQuestEntry(node.getAttribute('data-world-quest-id') || ''));
   });
 
-  const activeEntry = entries.find(entry => entry.id === _selectedWorldQuestEntryId) || entries[0] || null;
+  const activeEntry = allEntries.find(entry => entry.id === _selectedWorldQuestEntryId) || allEntries[0] || null;
   if (!activeEntry) {
     detail.innerHTML = '<div class="world-empty-note">No quest lead is selected.</div>';
     return;
   }
+
+  const isAssigned = assignedIds.has(activeEntry.id);
 
   detail.innerHTML = `
     <div class="world-site-detail-head compact">
@@ -3006,11 +3213,19 @@ function renderWorldQuestBoard(currentTile, selectedTile) {
     <div class="world-empty-note world-quest-detail-copy">${escHtml(activeEntry.detail || activeEntry.meta || 'No further quest detail available yet.')}</div>
     ${activeEntry.sense ? `<div class="quest-line-sense">${escHtml(activeEntry.sense)}</div>` : ''}
     <div class="world-site-actions world-quest-actions">
+      <button type="button" class="btn-sm ${isAssigned ? 'btn-ghost' : 'btn-primary'}" id="world-quest-assign-action">${isAssigned ? 'Unassign Quest' : 'Assign Quest'}</button>
       ${activeEntry.action ? `<button type="button" class="btn-sm ${activeEntry.actionKind === 'primary' ? 'btn-primary' : 'btn-ghost'}" id="world-quest-primary-action">${escHtml(activeEntry.actionLabel || 'Take action')}</button>` : ''}
       <button type="button" class="btn-sm btn-ghost" id="world-quest-show-local">Show Local Context</button>
     </div>
   `;
 
+  detail.querySelector('#world-quest-assign-action')?.addEventListener('click', () => {
+    if (isAssigned) {
+      unassignWorldQuestEntry(activeEntry.id);
+    } else {
+      assignWorldQuestEntry(activeEntry.id);
+    }
+  });
   detail.querySelector('#world-quest-primary-action')?.addEventListener('click', () => activateWorldQuestEntry(activeEntry.id));
   detail.querySelector('#world-quest-show-local')?.addEventListener('click', () => setWorldSupportTab('local'));
 }
@@ -3022,7 +3237,7 @@ function renderWorldPresenceFeed(currentTile, selectedTile) {
 
   const companions = Array.isArray(_gameState?.companions) ? _gameState.companions : [];
   const visiblePlayers = getVisiblePlayers();
-  const cityId = selectedTile.cityId || currentTile.cityId;
+  const cityId = getTileSettlementId(selectedTile) || getTileSettlementId(currentTile);
   const cityRoster = cityId === 'ashgate' ? getAshgateRoster() : [];
 
   if (summary) {
@@ -3071,7 +3286,7 @@ function renderWorldSupportPanels(selectedTile, x, y) {
 
   if (title) title.textContent = `${area.name} Command Surface`;
   if (desc) {
-    desc.textContent = selectedTile.cityId === 'ashgate'
+    desc.textContent = getTileSettlementId(selectedTile) === 'ashgate'
       ? 'Ashgate contracts, services, and named NPCs now route through the local field.'
       : 'Map-first routing for local actions, contracts, presence, and logs.';
   }
