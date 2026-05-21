@@ -353,18 +353,20 @@ async function enterGame() {
 }
 
 function getRememberedCharacterId() {
-  if (!_account?.id) return null;
+  const accountKey = _account?.id || _account?.accountId || null;
+  if (!accountKey) return null;
   try {
-    return window.localStorage.getItem(`${LAST_CHAR_STORAGE_PREFIX}${_account.id}`);
+    return window.localStorage.getItem(`${LAST_CHAR_STORAGE_PREFIX}${accountKey}`);
   } catch {
     return null;
   }
 }
 
 function rememberCharacterId(charId) {
-  if (!_account?.id || !charId) return;
+  const accountKey = _account?.id || _account?.accountId || null;
+  if (!accountKey || !charId) return;
   try {
-    window.localStorage.setItem(`${LAST_CHAR_STORAGE_PREFIX}${_account.id}`, charId);
+    window.localStorage.setItem(`${LAST_CHAR_STORAGE_PREFIX}${accountKey}`, charId);
   } catch {
     // Ignore storage failures.
   }
