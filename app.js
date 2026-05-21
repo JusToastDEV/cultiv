@@ -682,12 +682,24 @@ function renderBattleModal() {
 
 async function doBattleAction(action, options = {}) {
   if (_guestMode || !_character) return;
+  const normalizedAction = ({
+    attack: 'battleAttack',
+    defend: 'battleDefend',
+    flee: 'battleFlee'
+  })[String(action || '').toLowerCase()] || action;
+
   const r = await API.post('/api/game/action', {
     action: 'battleAction',
-    options: { action, ...options }
+    options: { action: normalizedAction, ...options }
   });
   if (!r.ok) {
-    showToast(r.data.error || 'Battle action failed.', 'warn');
+    const err = r.data?.error || 'Battle action failed.';
+    if (/no active battle/i.test(err)) {
+      closeBattleModal();
+      showToast('Battle ended. Start another challenge from the local field.', 'warn');
+      return;
+    }
+    showToast(err, 'warn');
     return;
   }
 
@@ -721,7 +733,13 @@ async function startLocalBattle(enemyId, enemyName, options = {}) {
     }
   });
   if (!r.ok) {
-    showToast(r.data.error || 'Could not start battle.', 'warn');
+    const err = r.data?.error || 'Could not start battle.';
+    if (/already active/i.test(err) && _gameState?.battle) {
+      openBattleModal();
+      showToast('An active battle is already in progress.', 'warn');
+      return;
+    }
+    showToast(err, 'warn');
     return;
   }
 
@@ -731,6 +749,35 @@ async function startLocalBattle(enemyId, enemyName, options = {}) {
   appendToLog((r.data.result || []).join(' '));
   openBattleModal();
   showToast(`Battle started: ${enemyName}.`, 'warn');
+}
+
+function handleLocalPlayerInteraction(playerName) {
+  const safeName = String(playerName || 'Cultivator').trim() || 'Cultivator';
+  showInteractionModal({
+    title: safeName,
+    subtitle: 'Local Presence · Shared Tile',
+    text: `${safeName} is sharing your local tile. PvP systems are still being expanded, but local presence and spar hooks are now available from this interaction panel.`,
+    tags: ['Nearby cultivator', 'Local map'],
+    actions: [
+      {
+        label: 'Send greeting',
+        detail: 'Log a local acknowledgement ping.',
+        kind: 'primary',
+        run: () => {
+          appendToLog(`You greet ${safeName} on the local field.`);
+          showToast(`Greeting sent to ${safeName}.`, 'ok');
+        }
+      },
+      {
+        label: 'Issue spar challenge',
+        detail: 'Launch a provisional duel encounter.',
+        kind: 'primary',
+        closeOnSelect: false,
+        run: () => startLocalBattle(`spar-${slugifySurfaceKey(safeName)}`, `${safeName} (Spar)`, { source: 'duel', danger: 1 })
+      },
+      { label: 'Back to district', detail: 'Keep moving through the field.', kind: 'ghost', run: () => {} }
+    ]
+  });
 }
 
 // ── Polling ────────────────────────────────────────────────────
@@ -1941,6 +1988,8 @@ function getLocalActionForSubtile(worldTile, subtile) {
 }
 
 function getFieldActionContext(mode, worldTile, subtile) {
+  const currentX = _gameState?.tileX ?? 9;
+  const currentY = _gameState?.tileY ?? 6;
   if (!_localMapData || !_localViewTile || _viewMode !== 'local') {
     return {
       regionId: getRenderedRegionId(_gameState),
@@ -1963,8 +2012,9 @@ function getFieldActionContext(mode, worldTile, subtile) {
 
   return {
     regionId: _localViewTile.regionId,
-    x: _localViewTile.x,
-    y: _localViewTile.y,
+    // Local-node actions should always resolve against the character's current world tile.
+    x: currentX,
+    y: currentY,
     terrainType: terrainByMode[mode] || worldTile?.t || '.',
     hazard: Math.max(worldTile?.hazard ?? 0, subtile?.hazards?.length ? 1 : 0, subtile?.mobs?.length ? 1 : 0),
     spiritDensity: Math.max(worldTile?.spiritDensity ?? 0, mode === 'spirit' ? 1 : 0),
@@ -2637,6 +2687,9 @@ function renderLocalInspector(tile, x, y) {
     if (subtile?.mobs?.length) {
       actionButtons.push(`<button type="button" class="btn-sm btn-primary" onclick="startLocalBattle('${subtile.mobs[0]}', '${escHtml(titleizeSlug(subtile.mobs[0]))}', { source: 'field', danger: 1 })">Engage Hostiles</button>`);
     }
+    if (visitors.length) {
+      actionButtons.push(`<button type="button" class="btn-sm btn-ghost" onclick="handleLocalPlayerInteraction('${escHtml(visitors[0].name)}')">Interact With ${escHtml(visitors[0].name)}</button>`);
+    }
     if (subtile?.service) {
       const label = subtile.npcName
         ? `Talk to ${subtile.npcName}`
@@ -3094,6 +3147,10 @@ async function performTileFieldAction(mode, x, y) {
   const currentX = _gameState?.tileX ?? 9;
   const currentY = _gameState?.tileY ?? 6;
   const inLocalField = _viewMode === 'local' && _localMapData && _localViewTile;
+  if (inLocalField && (_localViewTile.x !== currentX || _localViewTile.y !== currentY)) {
+    showToast('Return to your current world tile before working local nodes.', 'warn');
+    return;
+  }
   if (!inLocalField && (x !== currentX || y !== currentY)) {
     showToast('You need to stand on a tile before farming it.', 'warn');
     return;

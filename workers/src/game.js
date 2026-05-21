@@ -768,7 +768,13 @@ function actionBattle(state, character, options) {
   if (!battleAct) return { error: 'action required in options for battle' };
 
   if (battleAct === 'start') {
-    if (state.battle) return { error: 'A battle is already active.' };
+    if (state.battle) {
+      return {
+        state,
+        log: [`${state.battle.enemyName || 'The opponent'} is already engaged. Continue the active battle.`],
+        skipActionCooldown: true
+      };
+    }
     const battle = getBattleEnemyProfile(enemyId, enemyName, danger, state);
     battle.source = source || 'field';
     return {
