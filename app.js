@@ -7,6 +7,7 @@
 const LIVE_WORKER_ORIGIN = 'https://cultiv.davidmergenthaler02.workers.dev';
 const GUEST_MODE_STORAGE_KEY = 'sh_guest_mode';
 const LAST_CHAR_STORAGE_PREFIX = 'sh_last_char:';
+const CUSTOM_WORLD_TILE_STORAGE_KEY = 'sh_custom_world_tiles:v1';
 
 const API = (() => {
   const BASE = ''; // same-origin
@@ -1435,6 +1436,8 @@ const TILE_SIZE = 34;
 function getAfTile(x, y) {
   if (x <= 0 || x >= AF_W - 1 || y <= 0 || y >= AF_H - 1) return { t:'M' };
   const key = `${x}:${y}`;
+  const customTile = getCustomWorldTile('ashen-frontier', x, y);
+  if (customTile) return customTile;
   const starterTile = EARLY_ACCESS_STARTER_TILES.get(key);
   if (starterTile) return { ...starterTile };
 
@@ -1452,37 +1455,120 @@ function getAfTile(x, y) {
 }
 
 function getRegionTile(regionId, x, y) {
+  const customTile = getCustomWorldTile(regionId, x, y);
+  if (customTile) return customTile;
   if (regionId === 'ashen-frontier') return getAfTile(x, y);
 
-  // Fallback procedural tile profile for non-Ashen regions that still appear in live saves.
-  // This keeps the map readable and interactive instead of collapsing into all-mountain placeholders.
-  const seed = hashString(`${regionId}:${x}:${y}`);
-  const roll = seed % 100;
-  let t = '.';
-  if (roll < 8) t = 'F';
-  else if (roll < 14) t = 'H';
-  else if (roll < 22) t = 'W';
-  else if (roll < 28) t = 'V';
-  else if (roll < 34) t = 'K';
-  else if (roll < 38) t = 'X';
-
-  const hazard = Math.max(0, Math.min(4, Math.floor((seed % 11) / 3)));
-  const spiritDensity = t === 'V' ? 2 : t === 'H' ? 1 : 0;
-  const tile = {
-    t,
-    name: `${titleizeSlug(regionId)} Frontier`,
-    hazard,
-    spiritDensity,
-    herbs: t === 'H' || t === 'F' ? ['wildherb'] : [],
-    ores: t === 'K' ? ['iron-ore'] : [],
-    mobs: t === 'W' || t === 'F' ? ['wild-beast'] : [],
-    drops: t === 'X' ? ['ancient-fragment'] : []
+  // Early access is currently constrained to Ashen Frontier starter territory.
+  return {
+    t: 'M',
+    closedOff: true,
+    name: `${titleizeSlug(regionId)} Expanse`,
+    earlyAccessNote: 'Only the Ashen Frontier starter routes are open during this phase.'
   };
-  return tile;
 }
 
 function getRenderedRegionId(state = _gameState) {
-  return state?.regionId ?? state?.region_id ?? state?.currentRegionId ?? state?.mapRegionId ?? 'ashen-frontier';
+  const candidate = state?.regionId ?? state?.region_id ?? state?.currentRegionId ?? state?.mapRegionId ?? 'ashen-frontier';
+  return candidate === 'ashen-frontier' ? candidate : 'ashen-frontier';
+}
+
+function getCustomWorldTileStore() {
+  try {
+    const raw = window.localStorage.getItem(CUSTOM_WORLD_TILE_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    return parsed;
+  } catch {
+    return {};
+  }
+}
+
+function saveCustomWorldTileStore(store) {
+  try {
+    window.localStorage.setItem(CUSTOM_WORLD_TILE_STORAGE_KEY, JSON.stringify(store));
+  } catch {
+    showToast('Could not persist world tile setup on this browser.', 'warn');
+  }
+}
+
+function customWorldTileKey(regionId, x, y) {
+  return `${String(regionId || '').trim()}:${Number(x)}:${Number(y)}`;
+}
+
+function getCustomWorldTile(regionId, x, y) {
+  const store = getCustomWorldTileStore();
+  const key = customWorldTileKey(regionId, x, y);
+  const tile = store[key];
+  if (!tile || typeof tile !== 'object') return null;
+  return { ...tile };
+}
+
+function listCustomWorldTiles() {
+  const store = getCustomWorldTileStore();
+  return Object.entries(store).map(([key, tile]) => ({ key, tile }));
+}
+
+function saveAdminWorldTileOverride() {
+  const regionId = (document.getElementById('admin-world-region')?.value || 'ashen-frontier').trim() || 'ashen-frontier';
+  const x = parseInt(document.getElementById('admin-world-x')?.value || '9', 10);
+  const y = parseInt(document.getElementById('admin-world-y')?.value || '6', 10);
+  const t = (document.getElementById('admin-world-terrain')?.value || '.').trim().toUpperCase();
+  const name = (document.getElementById('admin-world-name')?.value || '').trim();
+  const hazard = parseInt(document.getElementById('admin-world-hazard')?.value || '0', 10);
+  const spiritDensity = parseInt(document.getElementById('admin-world-spirit')?.value || '0', 10);
+  const herbs = (document.getElementById('admin-world-herbs')?.value || '').split(',').map(v => v.trim()).filter(Boolean);
+  const ores = (document.getElementById('admin-world-ores')?.value || '').split(',').map(v => v.trim()).filter(Boolean);
+  const mobs = (document.getElementById('admin-world-mobs')?.value || '').split(',').map(v => v.trim()).filter(Boolean);
+  const drops = (document.getElementById('admin-world-drops')?.value || '').split(',').map(v => v.trim()).filter(Boolean);
+
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    showToast('World tile X and Y must be valid numbers.', 'error');
+    return;
+  }
+  if (!/^[A-Z\.]$/.test(t)) {
+    showToast('Terrain must be a single tile glyph (e.g. R, C, H, K, V, F, W, X, M, .).', 'error');
+    return;
+  }
+
+  const store = getCustomWorldTileStore();
+  const key = customWorldTileKey(regionId, x, y);
+  store[key] = {
+    t,
+    name: name || `${titleizeSlug(regionId)} Frontier`,
+    hazard: Number.isFinite(hazard) ? Math.max(0, hazard) : 0,
+    spiritDensity: Number.isFinite(spiritDensity) ? Math.max(0, spiritDensity) : 0,
+    herbs,
+    ores,
+    mobs,
+    drops
+  };
+  saveCustomWorldTileStore(store);
+  showToast(`World tile override saved for ${regionId} ${x},${y}.`, 'ok');
+  renderAdminWorldTileList();
+  if (document.getElementById('panel-explore')?.classList.contains('active')) {
+    renderTileMap();
+  }
+}
+
+function renderAdminWorldTileList() {
+  const list = document.getElementById('admin-world-tile-list');
+  if (!list) return;
+  const rows = listCustomWorldTiles();
+  if (!rows.length) {
+    list.innerHTML = '<p class="text-muted">No custom world tile overrides saved yet.</p>';
+    return;
+  }
+
+  list.innerHTML = rows.slice(0, 80).map(({ key, tile }) => `
+    <div class="feature-row">
+      <span class="feature-id">${escHtml(key)}</span>
+      <span class="feature-status-badge">${escHtml(tile.t || '.')}</span>
+      <span class="text-muted">${escHtml(tile.name || 'Custom Tile')}</span>
+      <button class="btn-xs btn-ghost" type="button" onclick="window._adminDeleteWorldTile('${escHtml(key)}')">Delete</button>
+    </div>
+  `).join('');
 }
 
 function titleizeSlug(value) {
@@ -3568,9 +3654,19 @@ function renderWorldMapView(grid, wrap, TILE_SIZE) {
   const visited = new Set(state.visitedTiles ?? []);
 
   if (countVisitedTiles(visited, regionId) === 0) {
-    for (let dy = -2; dy <= 2; dy++)
-      for (let dx = -2; dx <= 2; dx++)
-        visited.add(`${regionId}:${px + dx}:${py + dy}`);
+    if (regionId === 'ashen-frontier') {
+      for (let y = 5; y <= 7; y += 1) {
+        for (let x = 8; x <= 10; x += 1) {
+          visited.add(`ashen-frontier:${x}:${y}`);
+        }
+      }
+    } else {
+      for (let dy = -2; dy <= 2; dy++) {
+        for (let dx = -2; dx <= 2; dx++) {
+          visited.add(`${regionId}:${px + dx}:${py + dy}`);
+        }
+      }
+    }
   }
 
   const mapW = regionId === 'ashen-frontier' ? AF_W : 10;
@@ -3829,7 +3925,7 @@ async function moveTile(x, y) {
     showTileInfo(tile, x, y, { statusMessage: `Still traveling… ${secs}s until movement opens again.` });
     return;
   }
-  const regionId = _gameState?.regionId ?? 'ashen-frontier';
+  const regionId = getRenderedRegionId(_gameState);
   const r = await API.post('/api/game/action', { action: 'moveToTile', options: { x, y, regionId, terrainType: tile.t } });
   if (!r.ok) {
     if (r.data.cooldown_ms) {
@@ -4569,6 +4665,7 @@ function setupAdminPanel() {
   // Content authoring
   document.getElementById('admin-item-save')?.addEventListener('click', saveAdminItemTemplate);
   document.getElementById('admin-node-save')?.addEventListener('click', saveAdminZoneNode);
+  document.getElementById('admin-world-tile-save')?.addEventListener('click', saveAdminWorldTileOverride);
 
   // Audit + stats refresh
   document.getElementById('admin-audit-refresh')?.addEventListener('click', loadAdminAudit);
@@ -4733,6 +4830,8 @@ async function loadAdminContent() {
       `).join('') || '<p class="text-muted">No zone nodes yet.</p>';
     }
   }
+
+  renderAdminWorldTileList();
 }
 
 async function saveAdminItemTemplate() {
@@ -4819,6 +4918,18 @@ window._adminDeleteEvent = async (eventId) => {
   const r = await API.delete(`/api/admin/events/${eventId}`);
   showToast(r.ok ? 'Event deleted.' : (r.data.error || 'Error'), r.ok ? 'ok' : 'error');
   if (r.ok) loadAdminEvents();
+};
+
+window._adminDeleteWorldTile = (key) => {
+  const store = getCustomWorldTileStore();
+  if (!store[key]) return;
+  delete store[key];
+  saveCustomWorldTileStore(store);
+  renderAdminWorldTileList();
+  if (document.getElementById('panel-explore')?.classList.contains('active')) {
+    renderTileMap();
+  }
+  showToast(`Removed world tile override: ${key}`, 'ok');
 };
 
 // ── Toast notifications ────────────────────────────────────────

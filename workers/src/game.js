@@ -212,7 +212,7 @@ export async function handleGameState(request, env, account) {
 
 function normalizeCharacterStateCoordinates(state) {
   const source = state && typeof state === 'object' ? state : {};
-  const regionId = String(
+  const sourceRegionId = String(
     source.regionId
     ?? source.region_id
     ?? source.currentRegionId
@@ -221,13 +221,32 @@ function normalizeCharacterStateCoordinates(state) {
   );
   const rawX = source.tileX ?? source.tile_x ?? source.x ?? source.currentTileX ?? source.mapX ?? source.worldX ?? source.currentX;
   const rawY = source.tileY ?? source.tile_y ?? source.y ?? source.currentTileY ?? source.mapY ?? source.worldY ?? source.currentY;
-  const tileX = Number.isFinite(Number(rawX)) ? Number(rawX) : 9;
-  const tileY = Number.isFinite(Number(rawY)) ? Number(rawY) : 6;
+  let tileX = Number.isFinite(Number(rawX)) ? Number(rawX) : 9;
+  let tileY = Number.isFinite(Number(rawY)) ? Number(rawY) : 6;
+  let regionId = sourceRegionId;
+  let visitedTiles = Array.isArray(source.visitedTiles) ? source.visitedTiles : [];
+  const starterVisitedTiles = [
+    'ashen-frontier:8:5', 'ashen-frontier:9:5', 'ashen-frontier:10:5',
+    'ashen-frontier:8:6', 'ashen-frontier:9:6', 'ashen-frontier:10:6',
+    'ashen-frontier:8:7', 'ashen-frontier:9:7', 'ashen-frontier:10:7'
+  ];
+
+  // Early access canonical world scope: everyone resolves into Ashen Frontier starter lanes.
+  const isStarterTile = tileX >= 8 && tileX <= 10 && tileY >= 5 && tileY <= 7;
+  if (regionId !== 'ashen-frontier' || !isStarterTile) {
+    regionId = 'ashen-frontier';
+    if (!isStarterTile) {
+      tileX = 9;
+      tileY = 6;
+    }
+    visitedTiles = starterVisitedTiles;
+  }
 
   const didChange =
     source.regionId !== regionId ||
     source.tileX !== tileX ||
     source.tileY !== tileY ||
+    source.visitedTiles !== visitedTiles ||
     source.currentRegionId != null ||
     source.mapRegionId != null ||
     source.currentTileX != null ||
@@ -244,7 +263,7 @@ function normalizeCharacterStateCoordinates(state) {
 
   if (!didChange) return { state: source, didChange: false };
 
-  const next = { ...source, regionId, tileX, tileY };
+  const next = { ...source, regionId, tileX, tileY, visitedTiles };
   delete next.region_id;
   delete next.tile_x;
   delete next.tile_y;

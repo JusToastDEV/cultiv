@@ -511,6 +511,29 @@
                <div id="admin-node-list" class="feature-list"></div>
              </div>
            </div>
+
+           <h4 class="mt-md">World Tile Setup</h4>
+           <p class="text-muted">Define or override a world tile directly from admin tools (saved in browser storage for rapid iteration).</p>
+           <div class="admin-content-grid">
+             <input type="text" id="admin-world-region" placeholder="region id" value="ashen-frontier">
+             <input type="number" id="admin-world-x" placeholder="tile x" value="9">
+             <input type="number" id="admin-world-y" placeholder="tile y" value="6">
+             <input type="text" id="admin-world-terrain" placeholder="terrain glyph (R/C/H/K/V/F/W/X/M/.)" value="R">
+             <input type="text" id="admin-world-name" placeholder="display name">
+             <input type="number" id="admin-world-hazard" placeholder="hazard" value="0">
+             <input type="number" id="admin-world-spirit" placeholder="spirit density" value="0">
+             <input type="text" id="admin-world-herbs" placeholder="herbs csv (qi-grass,dustbloom)">
+             <input type="text" id="admin-world-ores" placeholder="ores csv">
+             <input type="text" id="admin-world-mobs" placeholder="mobs csv">
+             <input type="text" id="admin-world-drops" placeholder="drops csv">
+             <button class="btn-sm btn-primary" id="admin-world-tile-save" type="button">Save World Tile</button>
+           </div>
+           <div class="admin-content-grid mt-sm">
+             <div>
+               <h4>Custom World Tiles</h4>
+               <div id="admin-world-tile-list" class="feature-list"></div>
+             </div>
+           </div>
          </div>
 
          <div class="card mt-md hidden" id="admin-audit-panel">
