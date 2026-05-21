@@ -148,6 +148,14 @@ export async function handleGameState(request, env, account) {
   let state = await getCharacterState(env, character.id);
   if (!state) return json({ error: 'Character state not found' }, 404, request);
 
+  const normalizedState = normalizeCharacterStateCoordinates(state);
+  if (normalizedState.didChange) {
+    state = normalizedState.state;
+    await saveCharacterState(env, character.id, state);
+  } else {
+    state = normalizedState.state;
+  }
+
   // Resolve any completed crafts
   const craftResult = await resolveCompletedCrafts(env, character.id, state);
   if (craftResult) {
@@ -200,6 +208,31 @@ export async function handleGameState(request, env, account) {
       stage_index: character.stage_index
     }
   }, 200, request);
+}
+
+function normalizeCharacterStateCoordinates(state) {
+  const source = state && typeof state === 'object' ? state : {};
+  const regionId = String(source.regionId ?? source.region_id ?? 'ashen-frontier');
+  const rawX = source.tileX ?? source.tile_x ?? source.x;
+  const rawY = source.tileY ?? source.tile_y ?? source.y;
+  const tileX = Number.isFinite(Number(rawX)) ? Number(rawX) : 9;
+  const tileY = Number.isFinite(Number(rawY)) ? Number(rawY) : 6;
+
+  const didChange =
+    source.regionId !== regionId ||
+    source.tileX !== tileX ||
+    source.tileY !== tileY ||
+    source.region_id != null ||
+    source.tile_x != null ||
+    source.tile_y != null;
+
+  if (!didChange) return { state: source, didChange: false };
+
+  const next = { ...source, regionId, tileX, tileY };
+  delete next.region_id;
+  delete next.tile_x;
+  delete next.tile_y;
+  return { state: next, didChange: true };
 }
 
 async function getVisiblePlayersForTile(env, characterId, regionId, tileX, tileY) {
@@ -292,6 +325,13 @@ export async function handleGameAction(request, env, account) {
 
   let state = await getCharacterState(env, character.id);
   if (!state) return json({ error: 'Character state not found' }, 404, request);
+  {
+    const normalizedState = normalizeCharacterStateCoordinates(state);
+    state = normalizedState.state;
+    if (normalizedState.didChange) {
+      await saveCharacterState(env, character.id, state);
+    }
+  }
 
   // Cancel active training action
   if (action === 'cancelAction') {
