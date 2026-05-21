@@ -3701,7 +3701,6 @@ function renderLocalMapView(grid, wrap, TILE_SIZE) {
   const tiles = _localMapData.tiles;
   const worldTile = getRegionTile(_localViewTile.regionId, _localViewTile.x, _localViewTile.y);
   const localVisitors = getVisiblePlayers().filter(player => player.regionId === _localViewTile.regionId && player.tileX === _localViewTile.x && player.tileY === _localViewTile.y);
-  const visitorPositions = getLocalVisitorPositions(_localMapData, _localPlayerX, _localPlayerY, localVisitors);
   const canMoveNow = _localMovementReadyAt <= Date.now();
   
   grid.innerHTML = '';
@@ -3715,7 +3714,8 @@ function renderLocalMapView(grid, wrap, TILE_SIZE) {
       if (!subtile) continue;
       
       const isPlayer = x === _localPlayerX && y === _localPlayerY;
-      const visitor = visitorPositions.get(`${x}:${y}`) || null;
+      const visitorsHere = isPlayer ? localVisitors : [];
+      const visitorCount = visitorsHere.length;
       const canStep = Math.abs(x - _localPlayerX) + Math.abs(y - _localPlayerY) === 1 && canMoveNow;
       const isBlocked = subtile.terrain === '#' || subtile.terrain === 'B' || subtile.mobs?.length;
       const terrainGlyph = subtile.mobs?.length
@@ -3732,8 +3732,7 @@ function renderLocalMapView(grid, wrap, TILE_SIZE) {
       
       if (isPlayer) {
         cls += ' is-player';
-      } else if (visitor) {
-        cls += ' has-visitor has-player-visitor';
+        if (visitorCount) cls += ' has-player-visitor';
       } else if (canStep && !isBlocked) {
         cls += ' is-adjacent';
       } else if (subtile.resources?.length) {
@@ -3752,17 +3751,19 @@ function renderLocalMapView(grid, wrap, TILE_SIZE) {
       
       div.className = cls;
       const label = isPlayer
-        ? (_character?.name || 'You')
-        : visitor?.name || subtile.npcName || subtile.label || '';
+        ? `${_character?.name || 'You'}${visitorCount ? ` + ${visitorCount}` : ''}`
+        : subtile.npcName || subtile.label || '';
       const buildingGlyph = {
         'bank': '◫', 'guild': '⚒', 'sect': '⛩', 'techniques': '☰', 'patron': '⊗', 
         'blacksmith': '♨', 'duel': '⚔', 'rumor': '⊙', 'plaza': '◎'
       };
       const npcGlyph = subtile.service && buildingGlyph[subtile.service] ? buildingGlyph[subtile.service] : terrainGlyph;
-      const glyph = isPlayer ? '⊕' : visitor ? '●' : (subtile.npcName || subtile.service ? npcGlyph : terrainGlyph);
+      const glyph = isPlayer
+        ? (visitorCount ? '⊕●' : '⊕')
+        : (subtile.npcName || subtile.service ? npcGlyph : terrainGlyph);
       div.innerHTML = `${label ? `<span class="local-tile-nameplate">${escHtml(label)}</span>` : ''}<span class="local-tile-glyph">${escHtml(glyph)}</span>`;
-      div.title = visitor
-        ? `${visitor.name} · ${subtile.label || subtile.terrain_kind}`
+      div.title = isPlayer && visitorCount
+        ? `${_character?.name || 'You'} with ${visitorCount} nearby cultivator${visitorCount > 1 ? 's' : ''}: ${visitorsHere.map(player => player.name).join(', ')}`
         : isPlayer && subtile?.service
           ? `${subtile.npcName || titleizeSlug(subtile.service)} · click to interact`
           : `[${x},${y}] ${subtile.terrain_kind}`;
@@ -3770,7 +3771,7 @@ function renderLocalMapView(grid, wrap, TILE_SIZE) {
       if (isPlayer && subtile?.service) {
         div.addEventListener('click', () => handleLocalCityAction(subtile.service, _localViewTile.x, _localViewTile.y));
         div.style.cursor = 'pointer';
-      } else if (!isPlayer && !visitor && canStep && subtile.terrain !== '#' && subtile.terrain !== 'B') {
+      } else if (!isPlayer && canStep && subtile.terrain !== '#' && subtile.terrain !== 'B') {
         div.addEventListener('click', () => {
           if (moveLocalPlayer(x, y)) {
             renderTileMap();
