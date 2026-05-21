@@ -225,6 +225,7 @@ function normalizeCharacterStateCoordinates(state) {
   let tileY = Number.isFinite(Number(rawY)) ? Number(rawY) : 6;
   let regionId = sourceRegionId;
   let visitedTiles = Array.isArray(source.visitedTiles) ? source.visitedTiles : [];
+  const hasForeignVisitedTiles = visitedTiles.some(tile => typeof tile === 'string' && !tile.startsWith('ashen-frontier:'));
   const starterVisitedTiles = [
     'ashen-frontier:8:5', 'ashen-frontier:9:5', 'ashen-frontier:10:5',
     'ashen-frontier:8:6', 'ashen-frontier:9:6', 'ashen-frontier:10:6',
@@ -233,7 +234,7 @@ function normalizeCharacterStateCoordinates(state) {
 
   // Early access canonical world scope: everyone resolves into Ashen Frontier starter lanes.
   const isStarterTile = tileX >= 8 && tileX <= 10 && tileY >= 5 && tileY <= 7;
-  if (regionId !== 'ashen-frontier' || !isStarterTile) {
+  if (regionId !== 'ashen-frontier' || !isStarterTile || hasForeignVisitedTiles) {
     regionId = 'ashen-frontier';
     if (!isStarterTile) {
       tileX = 9;

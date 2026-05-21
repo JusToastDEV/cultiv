@@ -2105,7 +2105,14 @@ function getLocalPlayerTile() {
 }
 
 function getVisiblePlayers() {
-  return Array.isArray(_gameState?.visiblePlayers) ? _gameState.visiblePlayers : [];
+  return (Array.isArray(_gameState?.visiblePlayers) ? _gameState.visiblePlayers : [])
+    .map(player => ({
+      ...player,
+      regionId: String(player.regionId ?? '').trim(),
+      tileX: Number(player.tileX),
+      tileY: Number(player.tileY)
+    }))
+    .filter(player => Number.isFinite(player.tileX) && Number.isFinite(player.tileY) && player.regionId.length > 0);
 }
 
 function getLocalActionForSubtile(worldTile, subtile) {
@@ -3649,8 +3656,8 @@ function renderWorldMapView(grid, wrap, TILE_SIZE) {
 
   const state = _gameState;
   const regionId = getRenderedRegionId(state);
-  const px = state.tileX ?? 9;
-  const py = state.tileY ?? 6;
+  const px = Number(state.tileX ?? 9);
+  const py = Number(state.tileY ?? 6);
   const visited = new Set(state.visitedTiles ?? []);
 
   if (countVisitedTiles(visited, regionId) === 0) {
@@ -3797,6 +3804,7 @@ function renderLocalMapView(grid, wrap, TILE_SIZE) {
   const tiles = _localMapData.tiles;
   const worldTile = getRegionTile(_localViewTile.regionId, _localViewTile.x, _localViewTile.y);
   const localVisitors = getVisiblePlayers().filter(player => player.regionId === _localViewTile.regionId && player.tileX === _localViewTile.x && player.tileY === _localViewTile.y);
+  const visitorPositions = getLocalVisitorPositions(_localMapData, _localPlayerX, _localPlayerY, localVisitors);
   const canMoveNow = _localMovementReadyAt <= Date.now();
   
   grid.innerHTML = '';
@@ -3810,8 +3818,8 @@ function renderLocalMapView(grid, wrap, TILE_SIZE) {
       if (!subtile) continue;
       
       const isPlayer = x === _localPlayerX && y === _localPlayerY;
-      const visitorsHere = isPlayer ? localVisitors : [];
-      const visitorCount = visitorsHere.length;
+      const visitor = visitorPositions.get(`${x}:${y}`);
+      const visitorCount = isPlayer ? localVisitors.length : (visitor ? 1 : 0);
       const canStep = Math.abs(x - _localPlayerX) + Math.abs(y - _localPlayerY) === 1 && canMoveNow;
       const isBlocked = subtile.terrain === '#' || subtile.terrain === 'B' || subtile.mobs?.length;
       const terrainGlyph = subtile.mobs?.length
@@ -3848,7 +3856,9 @@ function renderLocalMapView(grid, wrap, TILE_SIZE) {
       div.className = cls;
       const label = isPlayer
         ? `${_character?.name || 'You'}${visitorCount ? ` + ${visitorCount}` : ''}`
-        : subtile.npcName || subtile.label || '';
+        : visitor
+          ? `${visitor.name}`
+          : subtile.npcName || subtile.label || '';
       const buildingGlyph = {
         'bank': '◫', 'guild': '⚒', 'sect': '⛩', 'techniques': '☰', 'patron': '⊗', 
         'blacksmith': '♨', 'duel': '⚔', 'rumor': '⊙', 'plaza': '◎'
@@ -3856,11 +3866,15 @@ function renderLocalMapView(grid, wrap, TILE_SIZE) {
       const npcGlyph = subtile.service && buildingGlyph[subtile.service] ? buildingGlyph[subtile.service] : terrainGlyph;
       const glyph = isPlayer
         ? (visitorCount ? '⊕●' : '⊕')
-        : (subtile.npcName || subtile.service ? npcGlyph : terrainGlyph);
+        : visitor
+          ? '●'
+          : (subtile.npcName || subtile.service ? npcGlyph : terrainGlyph);
       div.innerHTML = `${label ? `<span class="local-tile-nameplate">${escHtml(label)}</span>` : ''}<span class="local-tile-glyph">${escHtml(glyph)}</span>`;
       div.title = isPlayer && visitorCount
-        ? `${_character?.name || 'You'} with ${visitorCount} nearby cultivator${visitorCount > 1 ? 's' : ''}: ${visitorsHere.map(player => player.name).join(', ')}`
-        : isPlayer && subtile?.service
+        ? `${_character?.name || 'You'} with ${visitorCount} nearby cultivator${visitorCount > 1 ? 's' : ''}: ${localVisitors.map(player => player.name).join(', ')}`
+        : !isPlayer && visitor
+          ? `${visitor.name} is here as a nearby cultivator.`
+          : isPlayer && subtile?.service
           ? `${subtile.npcName || titleizeSlug(subtile.service)} · click to interact`
           : `[${x},${y}] ${subtile.terrain_kind}`;
       
