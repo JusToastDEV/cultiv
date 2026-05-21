@@ -212,9 +212,15 @@ export async function handleGameState(request, env, account) {
 
 function normalizeCharacterStateCoordinates(state) {
   const source = state && typeof state === 'object' ? state : {};
-  const regionId = String(source.regionId ?? source.region_id ?? 'ashen-frontier');
-  const rawX = source.tileX ?? source.tile_x ?? source.x;
-  const rawY = source.tileY ?? source.tile_y ?? source.y;
+  const regionId = String(
+    source.regionId
+    ?? source.region_id
+    ?? source.currentRegionId
+    ?? source.mapRegionId
+    ?? 'ashen-frontier'
+  );
+  const rawX = source.tileX ?? source.tile_x ?? source.x ?? source.currentTileX ?? source.mapX ?? source.worldX ?? source.currentX;
+  const rawY = source.tileY ?? source.tile_y ?? source.y ?? source.currentTileY ?? source.mapY ?? source.worldY ?? source.currentY;
   const tileX = Number.isFinite(Number(rawX)) ? Number(rawX) : 9;
   const tileY = Number.isFinite(Number(rawY)) ? Number(rawY) : 6;
 
@@ -222,6 +228,16 @@ function normalizeCharacterStateCoordinates(state) {
     source.regionId !== regionId ||
     source.tileX !== tileX ||
     source.tileY !== tileY ||
+    source.currentRegionId != null ||
+    source.mapRegionId != null ||
+    source.currentTileX != null ||
+    source.currentTileY != null ||
+    source.mapX != null ||
+    source.mapY != null ||
+    source.worldX != null ||
+    source.worldY != null ||
+    source.currentX != null ||
+    source.currentY != null ||
     source.region_id != null ||
     source.tile_x != null ||
     source.tile_y != null;
@@ -232,6 +248,16 @@ function normalizeCharacterStateCoordinates(state) {
   delete next.region_id;
   delete next.tile_x;
   delete next.tile_y;
+  delete next.currentRegionId;
+  delete next.mapRegionId;
+  delete next.currentTileX;
+  delete next.currentTileY;
+  delete next.mapX;
+  delete next.mapY;
+  delete next.worldX;
+  delete next.worldY;
+  delete next.currentX;
+  delete next.currentY;
   return { state: next, didChange: true };
 }
 
@@ -241,26 +267,36 @@ async function getVisiblePlayersForTile(env, characterId, regionId, tileX, tileY
     `SELECT c.id, c.name, c.realm_index, c.stage_index,
             COALESCE(
               json_extract(cs.state_json, '$.regionId'),
-              json_extract(cs.state_json, '$.region_id')
+              json_extract(cs.state_json, '$.region_id'),
+              json_extract(cs.state_json, '$.currentRegionId'),
+              json_extract(cs.state_json, '$.mapRegionId')
             ) AS regionId,
             CAST(COALESCE(
               json_extract(cs.state_json, '$.tileX'),
               json_extract(cs.state_json, '$.tile_x'),
-              json_extract(cs.state_json, '$.x')
+              json_extract(cs.state_json, '$.x'),
+              json_extract(cs.state_json, '$.currentTileX'),
+              json_extract(cs.state_json, '$.mapX'),
+              json_extract(cs.state_json, '$.worldX'),
+              json_extract(cs.state_json, '$.currentX')
             ) AS INTEGER) AS tileX,
             CAST(COALESCE(
               json_extract(cs.state_json, '$.tileY'),
               json_extract(cs.state_json, '$.tile_y'),
-              json_extract(cs.state_json, '$.y')
+              json_extract(cs.state_json, '$.y'),
+              json_extract(cs.state_json, '$.currentTileY'),
+              json_extract(cs.state_json, '$.mapY'),
+              json_extract(cs.state_json, '$.worldY'),
+              json_extract(cs.state_json, '$.currentY')
             ) AS INTEGER) AS tileY
      FROM characters c
      JOIN character_state cs ON cs.character_id = c.id
      WHERE c.is_deleted = 0
        AND c.id <> ?1
        AND c.last_active >= ?2
-       AND COALESCE(json_extract(cs.state_json, '$.regionId'), json_extract(cs.state_json, '$.region_id')) = ?3
-       AND ABS(CAST(COALESCE(json_extract(cs.state_json, '$.tileX'), json_extract(cs.state_json, '$.tile_x'), json_extract(cs.state_json, '$.x')) AS INTEGER) - ?4) <= 2
-       AND ABS(CAST(COALESCE(json_extract(cs.state_json, '$.tileY'), json_extract(cs.state_json, '$.tile_y'), json_extract(cs.state_json, '$.y')) AS INTEGER) - ?5) <= 2
+      AND COALESCE(json_extract(cs.state_json, '$.regionId'), json_extract(cs.state_json, '$.region_id'), json_extract(cs.state_json, '$.currentRegionId'), json_extract(cs.state_json, '$.mapRegionId')) = ?3
+      AND ABS(CAST(COALESCE(json_extract(cs.state_json, '$.tileX'), json_extract(cs.state_json, '$.tile_x'), json_extract(cs.state_json, '$.x'), json_extract(cs.state_json, '$.currentTileX'), json_extract(cs.state_json, '$.mapX'), json_extract(cs.state_json, '$.worldX'), json_extract(cs.state_json, '$.currentX')) AS INTEGER) - ?4) <= 2
+      AND ABS(CAST(COALESCE(json_extract(cs.state_json, '$.tileY'), json_extract(cs.state_json, '$.tile_y'), json_extract(cs.state_json, '$.y'), json_extract(cs.state_json, '$.currentTileY'), json_extract(cs.state_json, '$.mapY'), json_extract(cs.state_json, '$.worldY'), json_extract(cs.state_json, '$.currentY')) AS INTEGER) - ?5) <= 2
      ORDER BY c.last_active DESC
      LIMIT 12`
   ).bind(characterId, activeAfter, regionId, tileX, tileY).all();

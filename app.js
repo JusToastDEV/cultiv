@@ -6,6 +6,7 @@
 
 const LIVE_WORKER_ORIGIN = 'https://cultiv.davidmergenthaler02.workers.dev';
 const GUEST_MODE_STORAGE_KEY = 'sh_guest_mode';
+const LAST_CHAR_STORAGE_PREFIX = 'sh_last_char:';
 
 const API = (() => {
   const BASE = ''; // same-origin
@@ -343,7 +344,30 @@ async function enterGame() {
     return;
   }
   const chars = r.data.characters || [];
+  const rememberedId = getRememberedCharacterId();
+  if (rememberedId && chars.some(ch => ch.id === rememberedId)) {
+    await selectCharacter(rememberedId);
+    return;
+  }
   showCharacterSelect(chars);
+}
+
+function getRememberedCharacterId() {
+  if (!_account?.id) return null;
+  try {
+    return window.localStorage.getItem(`${LAST_CHAR_STORAGE_PREFIX}${_account.id}`);
+  } catch {
+    return null;
+  }
+}
+
+function rememberCharacterId(charId) {
+  if (!_account?.id || !charId) return;
+  try {
+    window.localStorage.setItem(`${LAST_CHAR_STORAGE_PREFIX}${_account.id}`, charId);
+  } catch {
+    // Ignore storage failures.
+  }
 }
 
 function showCharacterSelect(chars) {
@@ -500,6 +524,7 @@ async function selectCharacter(charId) {
     return;
   }
   _character = r.data.character;
+  rememberCharacterId(_character?.id || charId);
   _gameState  = r.data.state;
   _cooldowns  = r.data.cooldowns || {};
   _activeAction = r.data.activeAction ?? null;
