@@ -170,9 +170,11 @@ export async function handleGameState(request, env, account) {
     if (cooldowns[a] > 0) { activeAction = { type: a, remaining: cooldowns[a] }; break; }
   }
 
-  // Update last_active
-  env.DB.prepare('UPDATE characters SET last_active = ?1 WHERE id = ?2')
-    .bind(Date.now(), character.id).run().catch(() => {});
+  // Presence heartbeat used by visible-player queries.
+  try {
+    await env.DB.prepare('UPDATE characters SET last_active = ?1 WHERE id = ?2')
+      .bind(Date.now(), character.id).run();
+  } catch {}
 
   const visiblePlayers = await getVisiblePlayersForTile(
     env,
@@ -201,7 +203,7 @@ export async function handleGameState(request, env, account) {
 }
 
 async function getVisiblePlayersForTile(env, characterId, regionId, tileX, tileY) {
-  const activeAfter = Date.now() - (5 * 60 * 1000);
+  const activeAfter = Date.now() - (15 * 60 * 1000);
   const { results } = await env.DB.prepare(
     `SELECT c.id, c.name, c.realm_index, c.stage_index,
             json_extract(cs.state_json, '$.regionId') AS regionId,
@@ -237,6 +239,12 @@ export async function handleGameAction(request, env, account) {
 
   const character = await getActiveCharacter(request, env, account);
   if (!character) return json({ error: 'No active character. Send X-Character-Id header.' }, 400, request);
+
+  // Keep online presence fresh while actions are being executed.
+  try {
+    await env.DB.prepare('UPDATE characters SET last_active = ?1 WHERE id = ?2')
+      .bind(Date.now(), character.id).run();
+  } catch {}
 
   let body;
   try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400, request); }
